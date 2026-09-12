@@ -1,12 +1,13 @@
 """
 panels.py
-لایه‌ی یکپارچه‌شده‌ی مشترک برای پنل‌های پشتیبانی‌شده (مرزبان/پاسارگارد/3X-UI).
+لایه‌ی یکپارچه‌شده‌ی مشترک برای هر سه نوع پنل پشتیبانی‌شده (شاهراه/مرزبان/پاسارگارد).
 
-هیچ‌جای دیگری از ربات (هندلرها/منطق فروش و...) نباید مستقیماً به ماژول‌های پنل وصل شود؛
-همه باید از همین لایه استفاده کنند تا بتوان از چند نمونه پنل هم‌زمان پشتیبانی کرد.
+هیچ‌جای دیگری از ربات (هندلرها/منطق فروش و...) نباید مستقیماً به shahrah.py /
+ marzban_panel.py / pasargad_panel.py وصل شود؛ همه باید از همین دو تابع استفاده کنند تا بتوان
+ همزمان از هر سه نوع پنل (و از چند نمونه همزمان از هر نوع) پشتیبانی کرد.
 
 هر `panel` یک dict (ردیف جدول vpn_panels) است شامل کلیدهای:
-id, panel_type ('marzban'|'pasargad'|'threexui'), name, base_url, api_key, username, password, enabled.
+id, panel_type ('shahrah'|'marzban'|'pasargad'), name, base_url, api_key, username, password, enabled.
 """
 
 import json
@@ -16,6 +17,7 @@ import pasargad_panel
 import threexui_panel
 
 PANEL_TYPE_LABELS = {
+    "shahrah": "شاهراه",
     "marzban": "مرزبان",
     "pasargad": "پاسارگارد",
     "threexui": "3X-UI",
@@ -23,10 +25,12 @@ PANEL_TYPE_LABELS = {
 
 PANEL_TYPES = ("marzban", "pasargad", "threexui")
 
-# 🆕 روش‌های اتصال پشتیبانی‌شده برای هر نوع پنل.
+# 🆕 کدام نوع پنل کدام روش‌های اتصال را پشتیبانی می‌کند. شاهراه از ابتدا فقط
+# با API Key کار می‌کند (تغییری نکرده). مرزبان/پاسارگارد/3X-UI هم یوزرنیم/پسورد
 # (پیش‌فرض قدیمی) و هم یک API Key ثابت را پشتیبانی می‌کنند و ادمین از پنل
 # مدیریت ربات انتخاب می‌کند کدام‌یک برای هر نمونه پنل استفاده شود.
 PANEL_AUTH_METHODS = {
+    "shahrah": ("api_key",),
     "marzban": ("userpass", "api_key"),
     "pasargad": ("userpass", "api_key"),
     "threexui": ("userpass", "api_key"),
@@ -62,6 +66,8 @@ def panel_label(panel: dict) -> str:
 
 def _client(panel: dict):
     ptype = panel.get("panel_type")
+    if ptype == "shahrah":
+        return shahrah
     if ptype == "marzban":
         return marzban_panel
     if ptype == "pasargad":
@@ -71,6 +77,8 @@ def _client(panel: dict):
 
 async def test_connection(panel: dict) -> tuple[bool, dict | None, str]:
     ptype = panel.get("panel_type")
+    if ptype == "shahrah":
+        return await shahrah.get_me(panel)
     if ptype == "marzban":
         return await marzban_panel.test_connection(panel)
     if ptype == "pasargad":
@@ -84,6 +92,29 @@ async def get_catalog(panel: dict) -> tuple[list[dict], str]:
     """فهرست بسته/تمپلیت‌های قابل‌نگاشت روی این نمونه‌ی پنل را به یک قالب یکسان
     (idx/ref/name/label) برمی‌گرداند تا منوی نگاشت بدون توجه به نوع پنل یکسان باشد."""
     ptype = panel.get("panel_type")
+    if ptype == "shahrah":
+        ok, data, msg = await shahrah.get_plans(panel)
+        if not ok:
+            return [], msg
+        items = []
+        if isinstance(data, dict):
+            items = data.get("items") or data.get("plans") or data.get("data") or []
+        choices = []
+        for i, it in enumerate(items):
+            if not isinstance(it, dict):
+                continue
+            slug = it.get("slug") or it.get("planSlug")
+            if not slug:
+                continue
+            name = it.get("name") or it.get("title") or slug
+            label = f"📦 {name} ({slug})"
+            if len(label) > 60:
+                label = label[:57] + "..."
+            choices.append({"idx": i, "ref": slug, "name": name, "label": label})
+        if not choices:
+            return [], "هیچ بسته‌ای در پاسخ /plans پیدا نشد."
+        return choices, "موفق"
+
     client = marzban_panel if ptype == "marzban" else pasargad_panel if ptype == "pasargad" else None
     if client is not None:
         ok, data, msg = await client.get_templates(panel, force_refresh=True)
@@ -138,7 +169,8 @@ async def get_panel_info(panel: dict):
     if not allowed: return False, None, reason
     started=time.perf_counter(); ptype=panel.get("panel_type")
     try:
-        if ptype == "marzban": ok,data,msg = await marzban_panel.get_system_stats(panel)
+        if ptype == "shahrah": ok,data,msg = await shahrah.get_me(panel)
+        elif ptype == "marzban": ok,data,msg = await marzban_panel.get_system_stats(panel)
         elif ptype == "pasargad": ok,data,msg = await pasargad_panel.get_system_stats(panel)
         elif ptype == "threexui": ok,data,msg = await threexui_panel.test_connection(panel)
         else: return False,None,"نوع پنل نامعتبر."
@@ -148,7 +180,10 @@ async def get_panel_info(panel: dict):
         _panel_done(record,panel.get("id"),False,started,str(exc)); return False,None,str(exc)
 
 async def get_direct_catalog(panel: dict) -> tuple[list[dict], str]:
-    """گزینه‌های «بدون تمپلیت» را برای مرزبان/پاسارگارد برمی‌گرداند."""
+    """گزینه‌های «بدون تمپلیت» این نمونه پنل را برمی‌گرداند: برای مرزبان
+    اینباندهای فعال سرور (GET /api/inbounds)، برای پاسارگارد گروه‌های تعریف‌شده
+    (GET /api/groups/simple). شاهراه اصلاً این حالت را ندارد (تمام API آن
+    plan-محور است، نه inbound/group-محور)."""
     ptype = panel.get("panel_type")
     if ptype == "marzban":
         ok, data, msg = await marzban_panel.get_inbounds(panel, force_refresh=True)
@@ -199,6 +234,15 @@ async def create_service(panel: dict, username: str, remote_ref: str, volume_gb=
         return False, None, None, None, reason
     _started = time.perf_counter()
     ptype = panel.get("panel_type")
+    if ptype == "shahrah":
+        ok, data, msg = await shahrah.create_service(panel, remote_ref, username)
+        if not ok:
+            _panel_done(_record, panel.get("id"), False, _started, msg)
+            return False, None, None, data, msg
+        link, slug = shahrah.extract_link_and_slug(data)
+        _panel_done(_record, panel.get("id"), True, _started)
+        return True, link, slug or username, data, msg
+
     client = marzban_panel if ptype == "marzban" else pasargad_panel if ptype == "pasargad" else None
     if client is None and ptype != "threexui":
         return False, None, None, None, "نوع پنل نامعتبر."
@@ -281,6 +325,14 @@ async def renew_service(panel: dict, service_id: str, remote_ref: str | None = N
         return False, None, service_id, None, reason
     _started = time.perf_counter()
     ptype = panel.get("panel_type")
+    if ptype == "shahrah":
+        ok, data, msg = await shahrah.renew_service(panel, service_id, remote_ref)
+        if not ok:
+            return False, None, service_id, data, msg
+        link, slug = shahrah.extract_link_and_slug(data)
+        _panel_done(_record, panel.get("id"), True, _started)
+        return True, link, slug or service_id, data, msg
+
     client = marzban_panel if ptype == "marzban" else pasargad_panel if ptype == "pasargad" else None
     if client is None and ptype != "threexui":
         return False, None, service_id, None, "نوع پنل نامعتبر."
@@ -328,6 +380,58 @@ async def disable_service(panel: dict, service_id: str) -> tuple[bool, str]:
         return False, reason
     _started = time.perf_counter()
     ptype = panel.get("panel_type")
+    if ptype == "shahrah":
+        ok, data, msg = await shahrah.disable_service(panel, service_id)
+    elif ptype == "marzban":
+        ok, data, msg = await marzban_panel.disable_user(panel, service_id)
+    elif ptype == "pasargad":
+        ok, data, msg = await pasargad_panel.disable_user(panel, service_id)
+    elif ptype == "threexui":
+        ok, data, msg = await threexui_panel.disable_user(panel, service_id)
+    else:
+        return False, "نوع پنل نامعتبر."
+    _panel_done(_record, panel.get("id"), ok, _started, None if ok else msg)
+    return ok, msg
+
+
+async def enable_service(panel: dict, service_id: str) -> tuple[bool, str]:
+    import time
+    allowed, reason, _record = await _panel_guard(panel)
+    if not allowed:
+        return False, reason
+    _started = time.perf_counter()
+    ptype = panel.get("panel_type")
+    if ptype == "shahrah":
+        ok, data, msg = await shahrah.enable_service(panel, service_id)
+    elif ptype == "marzban":
+        ok, data, msg = await marzban_panel.enable_user(panel, service_id)
+    elif ptype == "pasargad":
+        ok, data, msg = await pasargad_panel.enable_user(panel, service_id)
+    elif ptype == "threexui":
+        ok, data, msg = await threexui_panel.enable_user(panel, service_id)
+    else:
+        return False, "نوع پنل نامعتبر."
+    _panel_done(_record, panel.get("id"), ok, _started, None if ok else msg)
+    return ok, msg
+
+
+async def regenerate_sub_link(panel: dict, service_id: str):
+    """(ok, link, remote_service_id, raw_data, message) — فقط لینک ساب/توکن سرویس را عوض می‌کند بدون اینکه حجم یا تاریخ انقضای
+    باقی‌مانده‌ی سرویس تغییر کند. برخلاف renew_service، اینجا هیچ پلان/حجم/روزی
+    گرفته نمی‌شود چون قرار نیست چیزی اضافه یا جایگزین شود؛ فقط دسترسی قبلی
+    (لینک قدیمی) قطع و یک لینک جدید صادر می‌شود."""
+    ptype = panel.get("panel_type")
+    if ptype == "shahrah":
+        return False, None, service_id, None, "برای این نوع پنل امکان تغییر خودکار لینک بدون تغییر بسته وجود ندارد؛ لطفا با پشتیبانی تماس بگیرید."
+    if ptype == "threexui":
+        def mutate(c):
+            c["subId"] = uuid_lib.uuid4().hex[:16]
+            return c
+        ok, data, msg = await threexui_panel._mutate_client(panel, service_id, mutate)
+        if not ok:
+            return False, None, service_id, data, msg
+        link, uname = threexui_panel.extract_link_and_username(panel, data)
+        return True, link, uname or service_id, data, msg
     client = marzban_panel if ptype == "marzban" else pasargad_panel if ptype == "pasargad" else None
     if client is None:
         return False, None, service_id, None, "نوع پنل نامعتبر."
@@ -382,6 +486,8 @@ async def reduce_service_quota(panel: dict, service_id: str, gb: float) -> tuple
     پنل کم می‌کند. شاهراه پشتیبانی نمی‌شود چون API آن plan-محور است و
     endpoint ای برای ویرایش مستقیم data_limit یک سرویس ندارد."""
     ptype = panel.get("panel_type")
+    if ptype == "shahrah":
+        return False, "پنل شاهراه امکان کسر مستقیم حجم از یک سرویس را ندارد (API آن plan-محور است)."
     if ptype == "marzban":
         ok, data, msg = await marzban_panel.reduce_user_quota(panel, service_id, gb)
     elif ptype == "pasargad":
@@ -394,9 +500,12 @@ async def reduce_service_quota(panel: dict, service_id: str, gb: float) -> tuple
 
 
 async def delete_service(panel: dict, service_id: str) -> tuple[bool, str]:
-    """سرویس را در پنل مربوطه حذف/غیرفعال می‌کند."""
+    """شاهراه API حذف مستقیم ندارد؛ برای این نوع فقط سرویس را گیر‌فعال می‌کنیم."""
     ptype = panel.get("panel_type")
-    if ptype == "marzban":
+    if ptype == "shahrah":
+        ok, data, msg = await shahrah.disable_service(panel, service_id)
+        return ok, msg
+    elif ptype == "marzban":
         ok, data, msg = await marzban_panel.delete_user(panel, service_id)
     elif ptype == "pasargad":
         ok, data, msg = await pasargad_panel.delete_user(panel, service_id)
@@ -408,14 +517,18 @@ async def delete_service(panel: dict, service_id: str) -> tuple[bool, str]:
 
 
 async def get_service_snapshot(panel: dict, service_id: str) -> tuple[bool, dict | None, str]:
-    """داده زنده سرویس را از خود پنل می‌خواند؛ لینک ساب منبع محاسبه مصرف نیست."""
+    """داده زنده سرویس را از خود پنل می‌خواند. شاهراه از endpoint سرویس،
+    مرزبان/پاسارگارد از endpoint کاربر استفاده می‌کنند؛ لینک ساب برای این دو
+    هرگز منبع محاسبه مصرف نیست."""
     import time
     allowed, reason, _record = await _panel_guard(panel)
     if not allowed:
         return False, None, reason
     _started = time.perf_counter()
     ptype = panel.get("panel_type")
-    if ptype == "marzban":
+    if ptype == "shahrah":
+        ok, data, msg = await shahrah.get_service(panel, service_id)
+    elif ptype == "marzban":
         ok, data, msg = await marzban_panel.get_user(panel, service_id)
     elif ptype == "pasargad":
         ok, data, msg = await pasargad_panel.get_user(panel, service_id)
