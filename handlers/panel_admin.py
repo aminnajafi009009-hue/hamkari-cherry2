@@ -28,7 +28,35 @@ import re
 import secrets
 import string
 from datetime import datetime, timedelta
-from subscription import format_service_package, days_remaining
+from subscription import days_remaining
+
+# این تابع در نسخه فعلی subscription.py وجود ندارد؛ برای جلوگیری از ImportError
+# و حفظ همان فرمت نسخه‌های قبلی، اینجا به‌صورت سازگار نگه داشته می‌شود.
+def format_service_package(volume_gb, days, plan_key=None):
+    try:
+        from config import FREE_TEST_PLAN_KEY
+    except Exception:
+        FREE_TEST_PLAN_KEY = None
+
+    if plan_key == FREE_TEST_PLAN_KEY and volume_gb is not None and days is not None:
+        volume_mb = round(float(volume_gb) * 1024)
+        if volume_mb < 1024:
+            volume_text = f"{volume_mb} مگابایت"
+        else:
+            gb_value = volume_mb / 1024
+            volume_text = f"{gb_value:.0f} گیگابایت" if gb_value == int(gb_value) else f"{gb_value:.2f} گیگابایت"
+        hours = float(days) * 24
+        if hours < 24:
+            hv = int(round(hours)) if hours == int(round(hours)) else round(hours, 1)
+            days_text = f"{hv} ساعت"
+        else:
+            dv = int(days) if float(days) == int(float(days)) else round(float(days), 2)
+            days_text = f"{dv} روز"
+        return volume_text, days_text
+
+    volume_text = f"{volume_gb} گیگابایت" if volume_gb else "طبق بسته‌ی انتخابی"
+    days_text = f"{days} روز" if days else "نامحدود"
+    return volume_text, days_text
 from io import BytesIO
 
 from aiogram import Router, F, types
