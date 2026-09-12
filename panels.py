@@ -12,7 +12,8 @@ id, panel_type ('shahrah'|'marzban'|'pasargad'), name, base_url, api_key, userna
 
 import json
 import uuid as uuid_lib
-import shahrah
+# شاهراه عمداً در این نسخه پشتیبانی نمی‌شود و نباید import شود.
+shahrah = None
 import marzban_panel
 import pasargad_panel
 import threexui_panel
@@ -24,7 +25,7 @@ PANEL_TYPE_LABELS = {
     "threexui": "3X-UI",
 }
 
-PANEL_TYPES = ["marzban", "pasargad", "threexui"]
+PANEL_TYPES = list(PANEL_TYPE_LABELS.keys())
 
 # 🆕 کدام نوع پنل کدام روش‌های اتصال را پشتیبانی می‌کند. شاهراه از ابتدا فقط
 # با API Key کار می‌کند (تغییری نکرده). مرزبان/پاسارگارد/3X-UI هم یوزرنیم/پسورد
