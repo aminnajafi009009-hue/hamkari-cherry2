@@ -1,8 +1,9 @@
 """
 panels.py
-لایه‌ی یکپارچه‌شده‌ی مشترک برای پنل‌های مرزبان، پاسارگارد و 3X-UI.
+لایه‌ی یکپارچه‌شده‌ی مشترک برای پنل‌های پشتیبانی‌شده (مرزبان/پاسارگارد/3X-UI).
 
-هیچ‌جای دیگری از ربات نباید مستقیماً به ماژول‌های پنل وصل شود؛ همه باید از همین لایه استفاده کنند تا چند نمونه از پنل‌های پشتیبانی‌شده هم‌زمان قابل مدیریت باشند.
+هیچ‌جای دیگری از ربات (هندلرها/منطق فروش و...) نباید مستقیماً به ماژول‌های پنل وصل شود؛
+همه باید از همین لایه استفاده کنند تا بتوان از چند نمونه پنل هم‌زمان پشتیبانی کرد.
 
 هر `panel` یک dict (ردیف جدول vpn_panels) است شامل کلیدهای:
 id, panel_type ('marzban'|'pasargad'|'threexui'), name, base_url, api_key, username, password, enabled.
@@ -22,7 +23,7 @@ PANEL_TYPE_LABELS = {
 
 PANEL_TYPES = list(PANEL_TYPE_LABELS.keys())
 
-# 🆕 روش‌های اتصال پنل‌های پشتیبانی‌شده. مرزبان/پاسارگارد/3X-UI یوزرنیم/پسورد
+# 🆕 روش‌های اتصال پشتیبانی‌شده برای هر نوع پنل.
 # (پیش‌فرض قدیمی) و هم یک API Key ثابت را پشتیبانی می‌کنند و ادمین از پنل
 # مدیریت ربات انتخاب می‌کند کدام‌یک برای هر نمونه پنل استفاده شود.
 PANEL_AUTH_METHODS = {
@@ -147,10 +148,7 @@ async def get_panel_info(panel: dict):
         _panel_done(record,panel.get("id"),False,started,str(exc)); return False,None,str(exc)
 
 async def get_direct_catalog(panel: dict) -> tuple[list[dict], str]:
-    """گزینه‌های «بدون تمپلیت» این نمونه پنل را برمی‌گرداند: برای مرزبان
-    اینباندهای فعال سرور (GET /api/inbounds)، برای پاسارگارد گروه‌های تعریف‌شده
-    (GET /api/groups/simple). شاهراه اصلاً این حالت را ندارد (تمام API آن
-    plan-محور است، نه inbound/group-محور)."""
+    """گزینه‌های «بدون تمپلیت» را برای مرزبان/پاسارگارد برمی‌گرداند."""
     ptype = panel.get("panel_type")
     if ptype == "marzban":
         ok, data, msg = await marzban_panel.get_inbounds(panel, force_refresh=True)
@@ -330,52 +328,6 @@ async def disable_service(panel: dict, service_id: str) -> tuple[bool, str]:
         return False, reason
     _started = time.perf_counter()
     ptype = panel.get("panel_type")
-    if ptype == "marzban":
-        ok, data, msg = await marzban_panel.disable_user(panel, service_id)
-    elif ptype == "pasargad":
-        ok, data, msg = await pasargad_panel.disable_user(panel, service_id)
-    elif ptype == "threexui":
-        ok, data, msg = await threexui_panel.disable_user(panel, service_id)
-    else:
-        return False, "نوع پنل نامعتبر."
-    _panel_done(_record, panel.get("id"), ok, _started, None if ok else msg)
-    return ok, msg
-
-
-async def enable_service(panel: dict, service_id: str) -> tuple[bool, str]:
-    import time
-    allowed, reason, _record = await _panel_guard(panel)
-    if not allowed:
-        return False, reason
-    _started = time.perf_counter()
-    ptype = panel.get("panel_type")
-    if ptype == "marzban":
-        ok, data, msg = await marzban_panel.enable_user(panel, service_id)
-    elif ptype == "pasargad":
-        ok, data, msg = await pasargad_panel.enable_user(panel, service_id)
-    elif ptype == "threexui":
-        ok, data, msg = await threexui_panel.enable_user(panel, service_id)
-    else:
-        return False, "نوع پنل نامعتبر."
-    _panel_done(_record, panel.get("id"), ok, _started, None if ok else msg)
-    return ok, msg
-
-
-async def regenerate_sub_link(panel: dict, service_id: str):
-    """(ok, link, remote_service_id, raw_data, message) — فقط لینک ساب/توکن سرویس را عوض می‌کند بدون اینکه حجم یا تاریخ انقضای
-    باقی‌مانده‌ی سرویس تغییر کند. برخلاف renew_service، اینجا هیچ پلان/حجم/روزی
-    گرفته نمی‌شود چون قرار نیست چیزی اضافه یا جایگزین شود؛ فقط دسترسی قبلی
-    (لینک قدیمی) قطع و یک لینک جدید صادر می‌شود."""
-    ptype = panel.get("panel_type")
-    if ptype == "threexui":
-        def mutate(c):
-            c["subId"] = uuid_lib.uuid4().hex[:16]
-            return c
-        ok, data, msg = await threexui_panel._mutate_client(panel, service_id, mutate)
-        if not ok:
-            return False, None, service_id, data, msg
-        link, uname = threexui_panel.extract_link_and_username(panel, data)
-        return True, link, uname or service_id, data, msg
     client = marzban_panel if ptype == "marzban" else pasargad_panel if ptype == "pasargad" else None
     if client is None:
         return False, None, service_id, None, "نوع پنل نامعتبر."
@@ -442,7 +394,7 @@ async def reduce_service_quota(panel: dict, service_id: str, gb: float) -> tuple
 
 
 async def delete_service(panel: dict, service_id: str) -> tuple[bool, str]:
-    """شاهراه API حذف مستقیم ندارد؛ برای این نوع فقط سرویس را گیر‌فعال می‌کنیم."""
+    """سرویس را در پنل مربوطه حذف/غیرفعال می‌کند."""
     ptype = panel.get("panel_type")
     if ptype == "marzban":
         ok, data, msg = await marzban_panel.delete_user(panel, service_id)
@@ -456,9 +408,7 @@ async def delete_service(panel: dict, service_id: str) -> tuple[bool, str]:
 
 
 async def get_service_snapshot(panel: dict, service_id: str) -> tuple[bool, dict | None, str]:
-    """داده زنده سرویس را از خود پنل می‌خواند. شاهراه از endpoint سرویس،
-    مرزبان/پاسارگارد از endpoint کاربر استفاده می‌کنند؛ لینک ساب برای این دو
-    هرگز منبع محاسبه مصرف نیست."""
+    """داده زنده سرویس را از خود پنل می‌خواند؛ لینک ساب منبع محاسبه مصرف نیست."""
     import time
     allowed, reason, _record = await _panel_guard(panel)
     if not allowed:
