@@ -11,7 +11,7 @@ router=Router(name='panel_admin')
 def ptext(p):
     return f"🛡️ <b>{p.get('name') or 'پنل پاسارگارد'}</b>\n\nوضعیت: {'🟢 فعال' if p.get('enabled') else '🔴 غیرفعال'}\nآدرس: <code>{p.get('base_url') or '-'}</code>\nروش اتصال: Username / Password"
 
-@router.callback_query(F.data=='admin_pasargad_panels')
+@router.callback_query(F.data.in_({'admin_pasargad', 'admin_pasargad_panels'}))
 async def open_panels(c):
     if not _is_admin(c.from_user.id): return
     await c.message.edit_text('🛡️ <b>مدیریت پنل‌های پاسارگارد</b>\n\nهر پنل یک نمونه مستقل است.',reply_markup=admin_pasargad_panels_keyboard(db.list_vpn_panels('pasargad'))); await c.answer()
