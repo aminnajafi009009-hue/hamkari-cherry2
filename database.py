@@ -3443,6 +3443,27 @@ def list_panel_plan_maps(scope=None, panel_id=None):
     cur.execute(q, vals); return _fetchall(cur)
 def delete_panel_plan_map(scope,scope_id):
     with transaction() as cur: cur.execute('DELETE FROM panel_plan_map WHERE scope=? AND scope_id=?',(scope,int(scope_id)))
+
+def clear_panel_plan_overrides_for_category(category_id):
+    """
+    Remove per-plan VPN panel mappings for every VIP plan in a category.
+
+    The category-level mapping (scope='vip_category') is intentionally kept.
+    This is used when an administrator changes the default mapping for a whole
+    category so older plan-specific overrides do not shadow the new default.
+    """
+    with transaction() as cur:
+        cur.execute(
+            """
+            DELETE FROM panel_plan_map
+             WHERE scope = 'vip_plan'
+               AND scope_id IN (
+                   SELECT id FROM vip_plans WHERE category_id = ?
+               )
+            """,
+            (int(category_id),),
+        )
+
 def get_panel_map_for_plan_key(plan_key):
     if plan_key==FREE_TEST_PLAN_KEY: return get_panel_plan_map('free_test',0)
     plan=get_vip_plan(plan_key)
