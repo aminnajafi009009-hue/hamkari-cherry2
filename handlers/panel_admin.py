@@ -208,3 +208,12 @@ async def clear(c):
     key=c.data.split('|',1)[1]; plan=db.get_vip_plan(key)
     if plan: db.delete_panel_plan_map('vip_plan',plan['id'])
     cat=db.get_vip_category(plan['category_id']); await c.message.edit_text('🚫 اتصال پنل این پلن حذف شد.',reply_markup=admin_vip_plan_detail_keyboard(key,cat['key'])); await c.answer()
+
+async def auto_fulfill_vip_via_panel(bot, uid, plan_key, order_id):
+    from handlers.marzban_admin import auto_fulfill_vip_via_marzban
+    return await auto_fulfill_vip_via_marzban(
+        bot,
+        uid,
+        plan_key,
+        order_id,
+    )
