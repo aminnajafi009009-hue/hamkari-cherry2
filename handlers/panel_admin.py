@@ -221,3 +221,14 @@ async def clear(c):
     key=c.data.split('|',1)[1]; plan=db.get_vip_plan(key)
     if plan: db.delete_panel_plan_map('vip_plan',plan['id'])
     cat=db.get_vip_category(plan['category_id']); await c.message.edit_text('🚫 اتصال پنل این پلن حذف شد.',reply_markup=admin_vip_plan_detail_keyboard(key,cat['key'])); await c.answer()
+
+# ---------------------------------------------------------------------------
+# Compatibility bridge
+# ---------------------------------------------------------------------------
+# Some versions of handlers/plans.py import the generic VIP fulfillment
+# entry-point from this module. Keep that public API here while the actual
+# implementation lives in marzban_admin and routes through vpn_panel, which
+# already supports the selected PasarGuard panel/template mapping.
+async def auto_fulfill_vip_via_panel(bot, uid, plan_key: str, order_id: int | None) -> bool:
+    from handlers.marzban_admin import auto_fulfill_vip_via_marzban
+    return await auto_fulfill_vip_via_marzban(bot, uid, plan_key, order_id)
