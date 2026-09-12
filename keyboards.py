@@ -196,11 +196,11 @@ def join_channels_keyboard(channels):
 def main_reply_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=db.get_text_override("main_free_test", "تست رایگان"), style="success"), KeyboardButton(text=db.get_text_override("main_buy", "خرید اشتراک"), style="success")],
-            [KeyboardButton(text=db.get_text_override("main_wallet", "کیف پول"), style="success"), KeyboardButton(text=db.get_text_override("main_renew", "تمدید سرویس"), style="success")],
-            [KeyboardButton(text=db.get_text_override("main_profile", "پروفایل من"), style="primary"), KeyboardButton(text=db.get_text_override("main_configs", "سرویس‌های من"), style="primary")],
-            [KeyboardButton(text=db.get_text_override("main_guides", "راهنما"), style="primary"), KeyboardButton(text=db.get_text_override("main_support", "پشتیبانی"), style="primary")],
-            [KeyboardButton(text=t("main_agency"), style="danger"), KeyboardButton(text=db.get_text_override("main_referral", "دعوت دوستان"), style="danger")],
+            [KeyboardButton(text=db.get_text_override("main_buy", "🛒 خرید اشتراک"), style="success"), KeyboardButton(text=db.get_text_override("main_free_test", "🎁 تست رایگان"), style="success")],
+            [KeyboardButton(text=db.get_text_override("main_configs", "📱 سرویس‌های من"), style="primary"), KeyboardButton(text=db.get_text_override("main_wallet", "💰 کیف پول"), style="primary")],
+            [KeyboardButton(text=db.get_text_override("main_referral", "👥 دعوت دوستان"), style="primary"), KeyboardButton(text=db.get_text_override("main_profile", "👤 پروفایل من"), style="primary")],
+            [KeyboardButton(text=db.get_text_override("main_renew", "🔁 تمدید سرویس"), style="success"), KeyboardButton(text=db.get_text_override("main_support", "👨‍💻 پشتیبانی"), style="primary")],
+            [KeyboardButton(text=db.get_text_override("main_guides", "📚 راهنما"), style="primary"), KeyboardButton(text=t("main_agency"), style="primary")],
         ],
         resize_keyboard=True,
         # منوی ربات توسط کلاینت تلگرام قابل باز/بسته شدن باشد.
@@ -1602,11 +1602,10 @@ def admin_permissions_keyboard(admin_id: str, selected=None):
 # فعال هستند و هر کدام می‌تواند چند نمونه (Instance) هم‌زمان داشته باشد.
 # ---------------------------------------------------------------------------
 def admin_vpn_panel_types_keyboard():
-    """انتخاب نوع پنل مدیریت؛ فقط پنل‌های پشتیبانی‌شده و بدون شاهراه."""
-    panel_types = (("marzban", "مرزبان"), ("pasargad", "پاسارگارد"), ("threexui", "3X-UI"))
+    """قدم اول: انتخاب نوع پنل برای مدیریت. هر سه نوع مستقل هم‌زمان قابل فعال‌شدن هستند."""
     buttons = [
-        [InlineKeyboardButton(text=label, callback_data=f"vpntype|{ptype}", style="primary")]
-        for ptype, label in panel_types
+        [InlineKeyboardButton(text=panels.PANEL_TYPE_LABELS[t], callback_data=f"vpntype|{t}", style="primary")]
+        for t in panels.PANEL_TYPES
     ]
     buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin_back", style="primary")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -1622,7 +1621,7 @@ def admin_vpn_panel_list_keyboard(panel_type: str, panels: list[dict]):
             text=f"{mark} {p['name']}", callback_data=f"vpndetail|{p['id']}", style="primary"
         )])
     buttons.append([InlineKeyboardButton(
-        text=f"➕ افزودن پنل {PANEL_TYPE_LABELS.get(panel_type, panel_type)} جدید",
+        text=f"➕ افزودن پنل {panels.PANEL_TYPE_LABELS.get(panel_type, panel_type)} جدید",
         callback_data=f"vpnadd|{panel_type}", style="success",
     )])
     buttons.append([InlineKeyboardButton(text="🔙 بازگشت به انتخاب نوع پنل", callback_data="admin_vpn_panels", style="primary")])
