@@ -196,10 +196,10 @@ def main_reply_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=db.get_text_override("main_buy", "🛒 خرید اشتراک"), style="success"), KeyboardButton(text=db.get_text_override("main_free_test", "🎁 تست رایگان"), style="success")],
-            [KeyboardButton(text=db.get_text_override("main_wallet", "💰 کیف پول"), style="success"), KeyboardButton(text=db.get_text_override("main_renew", "🔁 تمدید سرویس"), style="success")],
-            [KeyboardButton(text=db.get_text_override("main_profile", "👤 پروفایل من"), style="primary"), KeyboardButton(text=db.get_text_override("main_configs", "📱 سرویس‌های من"), style="primary")],
-            [KeyboardButton(text=db.get_text_override("main_guides", "📚 راهنما"), style="primary"), KeyboardButton(text=db.get_text_override("main_support", "👨‍💻 پشتیبانی"), style="primary")],
-            [KeyboardButton(text=db.get_text_override("main_agency", "🤝 درخواست نمایندگی"), style="danger"), KeyboardButton(text=db.get_text_override("main_referral", "👥 دعوت دوستان و کسب درآمد"), style="danger")],
+            [KeyboardButton(text=db.get_text_override("main_configs", "📱 سرویس‌های من"), style="primary"), KeyboardButton(text=db.get_text_override("main_wallet", "💰 کیف پول"), style="primary")],
+            [KeyboardButton(text=db.get_text_override("main_referral", "👥 دعوت دوستان"), style="primary"), KeyboardButton(text=db.get_text_override("main_profile", "👤 پروفایل من"), style="primary")],
+            [KeyboardButton(text=db.get_text_override("main_renew", "🔁 تمدید سرویس"), style="success"), KeyboardButton(text=db.get_text_override("main_support", "👨‍💻 پشتیبانی"), style="primary")],
+            [KeyboardButton(text=db.get_text_override("main_guides", "📚 راهنما"), style="primary"), KeyboardButton(text=t("main_agency"), style="primary")],
         ],
         resize_keyboard=True,
         # منوی ربات توسط کلاینت تلگرام قابل باز/بسته شدن باشد.
@@ -232,8 +232,8 @@ def admin_reply_keyboard(orders_enabled: bool | None = None, permissions: set[st
     add_pair("users", KeyboardButton(text="🔎 جستجوی کانفیگ", style="primary"))
     add_pair("broadcast", KeyboardButton(text="📢 پیام همگانی", style="primary"), "discounts", KeyboardButton(text="🎟 مدیریت تخفیف", style="primary"))
     add_pair("agency", KeyboardButton(text="🤝 نمایندگی (تخفیف VIP)", style="primary"), "plans", KeyboardButton(text="🗂 دسته‌بندی‌های VIP", style="primary"))
-    add_pair("plans", KeyboardButton(text="🛒 خرید اشتراک برای خودم", style="success"))
-    add_pair("vpn_panel", KeyboardButton(text=t("admin_manage_pasargad", "🛡️ مدیریت پنل‌های پاسارگارد"), style="primary"))
+    add_pair("plans", KeyboardButton(text="🛒 خرید اشتراک برای خودم", style="success"), "plans", KeyboardButton(text="📦 نگاشت پلن‌ها به پنل فعال", style="primary"))
+    add_pair("vpn_panel", KeyboardButton(text="🛡️ اتصال پنل پاسارگارد", style="primary"), "vpn_panel", KeyboardButton(text="🔀 انتخاب پنل VPN فعال", style="primary"))
     add_pair("referrals", KeyboardButton(text="🤝 مدیریت دعوت‌ها", style="primary"), "guides", KeyboardButton(text="📚 مدیریت راهنما", style="primary"))
     add_pair("logs", KeyboardButton(text="🦖 لاگ خطاها", style="primary"), "botinfo", KeyboardButton(text="ℹ️ اطلاعات ربات", style="primary"))
     add_pair("stickers", KeyboardButton(text="🎬 استیکرهای منو", style="primary"), "backup", KeyboardButton(text="💾 بکاپ", style="primary"))
@@ -528,7 +528,7 @@ def crypto_payment_keyboard(asset: str, wallet: str, amount: str):
     # برای «ارسال رسید» یا «بررسی پرداخت» زیر فاکتور قرار نمی‌گیرد.
     wallet_text = str(wallet or "").strip()
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=wallet_text, copy_text=CopyTextButton(text=wallet_text), style="primary")],
+        [InlineKeyboardButton(text=wallet_text, copy_text=CopyTextButton(text=wallet_text))],
     ])
 
 def config_detail_keyboard(cfg_id, sub_link_url: str | None = None, has_qr: bool = False, back_callback: str = "my_configs_vip", service_id: str | None = None, disabled: bool = False):
@@ -604,7 +604,9 @@ def admin_panel_menu(orders_enabled: bool = True, permissions: set[str] | None =
     add("🤝 نمایندگی (تخفیف VIP)", "admin_agency", "agency")
     add("🗂 دسته‌بندی‌های VIP", "admin_vip_categories", "plans")
     add("🛒 خرید اشتراک برای خودم", "admin_buy_subscription", "plans", "success")
-    add(t("admin_manage_pasargad", "🛡️ مدیریت پنل‌های پاسارگارد"), "admin_pasargad_panels", "vpn_panel")
+    add("📦 نگاشت پلن‌ها به پنل فعال", "admin_marzban", "plans")
+    add("🛡️ اتصال پنل پاسارگارد", "admin_pasargad", "vpn_panel")
+    add("🔀 انتخاب پنل VPN فعال", "admin_panel_choose", "vpn_panel")
     add("🤝 مدیریت دعوت‌ها", "admin_referrals", "referrals")
     add("📚 مدیریت راهنما", "admin_guides", "guides")
     add("📝 مدیریت متن‌های کاربر", "admin_texts", "texts")
@@ -742,7 +744,7 @@ def admin_purchase_notify_keyboard(uid: str, plan_key: str | None = None, order_
     # باشد، دکمه‌ی «ارسال خودکار از پنل» هم علاوه‌بر روش دستی (که هیچ تغییری
     # نکرده) نمایش داده می‌شود؛ انتخاب نهایی همیشه با ادمین است.
     auto_row = []
-    if vpn_panel.get_panel() and plan_key:
+    if vpn_panel.active_panel() and plan_key:
         mapping = db.get_marzban_plan_map_for_plan_key(plan_key)
         if mapping:
             auto_row = [[InlineKeyboardButton(
@@ -1417,6 +1419,18 @@ def admin_botinfo_channels_menu(channels: list[dict]):
 
 
 # ---------------------------------------------------------------------------
+# 🛡️ اتصال پنل پاسارگارد (پنل VPN)
+# ---------------------------------------------------------------------------
+def admin_pasargad_menu(status_text: str):
+    buttons=[[InlineKeyboardButton(text="🔌 تست اتصال", callback_data="pasargadtest", style="primary")],
+             [InlineKeyboardButton(text="➕ افزودن پنل سرور", callback_data="pasargad_add", style="success")]]
+    for row in db.get_vpn_panels("pasargad"):
+        buttons.append([InlineKeyboardButton(text=f"🗑 حذف «{row.get('name') or row.get('id')}»", callback_data=f"pasargaddel_{row['id']}", style="danger")])
+    buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin_back", style="primary")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+# ---------------------------------------------------------------------------
 # 🛡️ کیبوردهای مدیریت چندنمونه‌ای پنل پاسارگارد
 # ---------------------------------------------------------------------------
 def admin_pasargad_panels_keyboard(panels=None):
@@ -1431,8 +1445,8 @@ def admin_pasargad_panels_keyboard(panels=None):
             callback_data=f"pp_detail|{pid}",
             style="success" if panel.get("enabled") else "danger",
         )])
-    buttons.append([InlineKeyboardButton(text=t("admin_panel_add", "➕ افزودن پنل"), callback_data="pp_add", style="success")])
-    buttons.append([InlineKeyboardButton(text=t("admin_panel_back_admin", "🔙 بازگشت"), callback_data="admin_back", style="primary")])
+    buttons.append([InlineKeyboardButton(text="➕ افزودن پنل", callback_data="pp_add", style="success")])
+    buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin_back", style="primary")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -1441,15 +1455,16 @@ def admin_pasargad_panel_detail_keyboard(panel):
     pid = panel.get("id")
     enabled = bool(panel.get("enabled"))
     buttons = [
-        [InlineKeyboardButton(text=t("admin_panel_test", "🔌 تست اتصال"), callback_data=f"pp_test|{pid}", style="success")],
+        [InlineKeyboardButton(text="🔌 تست اتصال", callback_data=f"pp_test|{pid}", style="primary")],
         [InlineKeyboardButton(
-            text=t("admin_panel_disable", "⛔ غیرفعال کردن") if enabled else t("admin_panel_enable", "✅ فعال کردن"),
+            text="⛔ غیرفعال کردن" if enabled else "✅ فعال کردن",
             callback_data=f"pp_toggle|{pid}",
             style="danger" if enabled else "success",
         )],
-        [InlineKeyboardButton(text=t("admin_panel_edit", "✏️ ویرایش اطلاعات"), callback_data=f"pp_edit|{pid}", style="primary")],
-        [InlineKeyboardButton(text=t("admin_panel_delete", "🗑 حذف پنل"), callback_data=f"pp_delete|{pid}", style="danger")],
-        [InlineKeyboardButton(text=t("admin_panel_back_list", "🔙 لیست پنل‌ها"), callback_data="admin_pasargad_panels", style="primary")],
+        [InlineKeyboardButton(text="🔀 نگاشت پلن‌ها به این پنل", callback_data=f"pp_mapping|{pid}|0", style="success")],
+        [InlineKeyboardButton(text="✏️ ویرایش اطلاعات", callback_data=f"pp_edit|{pid}", style="primary")],
+        [InlineKeyboardButton(text="🗑 حذف پنل", callback_data=f"pp_delete|{pid}", style="danger")],
+        [InlineKeyboardButton(text="🔙 لیست پنل‌ها", callback_data="admin_pasargad_panels", style="primary")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -1458,12 +1473,126 @@ def admin_pasargad_panel_edit_keyboard(panel):
     """انتخاب فیلد قابل ویرایش پنل پاسارگارد."""
     pid = panel.get("id")
     buttons = [
-        [InlineKeyboardButton(text=t("admin_panel_name", "📝 نام پنل"), callback_data=f"pp_editfield|{pid}|name", style="primary")],
-        [InlineKeyboardButton(text=t("admin_panel_url", "🌐 آدرس پنل"), callback_data=f"pp_editfield|{pid}|base_url", style="primary")],
-        [InlineKeyboardButton(text=t("admin_panel_username", "👤 نام کاربری"), callback_data=f"pp_editfield|{pid}|username", style="primary")],
-        [InlineKeyboardButton(text=t("admin_panel_password", "🔑 رمز عبور"), callback_data=f"pp_editfield|{pid}|password", style="primary")],
-        [InlineKeyboardButton(text=t("admin_panel_back_detail", "🔙 بازگشت"), callback_data=f"pp_detail|{pid}", style="primary")],
+        [InlineKeyboardButton(text="📝 نام پنل", callback_data=f"pp_editfield|{pid}|name", style="primary")],
+        [InlineKeyboardButton(text="🌐 آدرس پنل", callback_data=f"pp_editfield|{pid}|base_url", style="primary")],
+        [InlineKeyboardButton(text="👤 نام کاربری", callback_data=f"pp_editfield|{pid}|username", style="primary")],
+        [InlineKeyboardButton(text="🔑 رمز عبور", callback_data=f"pp_editfield|{pid}|password", style="primary")],
+        [InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"pp_detail|{pid}", style="primary")],
     ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+
+
+def admin_pasargad_panel_mapping_keyboard(panel_id: int, plans, mappings=None, page: int = 0, per_page: int = 15):
+    """لیست پلن‌های VIP برای نگاشت به یک پنل پاسارگارد. هر پلن می‌تواند
+    به یک Template مشخص از همان پنل متصل شود."""
+    mappings = mappings or {}
+    plans = list(plans or [])
+    total_pages = max(1, (len(plans) + per_page - 1) // per_page)
+    page = max(0, min(int(page), total_pages - 1))
+    chunk = plans[page * per_page:(page + 1) * per_page]
+    buttons = []
+    for plan in chunk:
+        pid = int(plan.get("id"))
+        name = plan.get("name") or plan.get("plan_key") or f"پلن {pid}"
+        mapping = mappings.get(pid)
+        if mapping and str(mapping.get("panel_id")) == str(panel_id):
+            remote_name = mapping.get("remote_name") or mapping.get("remote_ref") or "تمپلیت"
+            label = f"🟢 {name} ← {remote_name}"
+        else:
+            label = f"⚪ {name} — بدون نگاشت"
+        buttons.append([InlineKeyboardButton(text=label, callback_data=f"pp_mapplan|{panel_id}|{pid}|{page}", style="success" if mapping else "primary")])
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="⬅️ صفحه قبل", callback_data=f"pp_mapping|{panel_id}|{page-1}", style="primary"))
+    nav.append(InlineKeyboardButton(text=f"📄 {page+1}/{total_pages}", callback_data="noop", style="primary"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton(text="صفحه بعد ➡️", callback_data=f"pp_mapping|{panel_id}|{page+1}", style="primary"))
+    if nav:
+        buttons.append(nav)
+    buttons.append([InlineKeyboardButton(text="🔙 بازگشت به پنل", callback_data=f"pp_detail|{panel_id}", style="primary")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def admin_pasargad_panel_template_map_keyboard(panel_id: int, plan_id: int, templates=None, current_ref=None):
+    """انتخاب Template پاسارگارد برای یک پلن."""
+    buttons = []
+    for template in (templates or []):
+        if not isinstance(template, dict) or template.get("id") is None:
+            continue
+        tid = template.get("id")
+        name = template.get("name") or template.get("remark") or str(tid)
+        selected = str(tid) == str(current_ref)
+        buttons.append([InlineKeyboardButton(
+            text=("✅ " if selected else "📦 ") + name,
+            callback_data=f"pp_maptemplate|{panel_id}|{plan_id}|{tid}",
+            style="success" if selected else "primary",
+        )])
+    if current_ref is not None:
+        buttons.append([InlineKeyboardButton(text="🚫 حذف نگاشت این پلن", callback_data=f"pp_mapclear|{panel_id}|{plan_id}", style="danger")])
+    if not buttons:
+        buttons.append([InlineKeyboardButton(text="⚠️ تمپلیتی در پنل پیدا نشد", callback_data=f"pp_mapping|{panel_id}|0", style="danger")])
+    buttons.append([InlineKeyboardButton(text="🔙 بازگشت به نگاشت پلن‌ها", callback_data=f"pp_mapping|{panel_id}|0", style="primary")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def admin_vip_plan_panel_keyboard(plan_key: str, panels=None, selected_panel_id=None):
+    """انتخاب پنل پاسارگارد برای یک پلن VIP."""
+    buttons = []
+    for panel in (panels or []):
+        pid = panel.get("id")
+        if not pid:
+            continue
+        selected = str(pid) == str(selected_panel_id)
+        name = panel.get("name") or f"پنل {pid}"
+        buttons.append([InlineKeyboardButton(
+            text=("✅ " if selected else "🖥️ ") + name,
+            callback_data=f"vipplanpanelset|{plan_key}|{pid}",
+            style="success" if selected else "primary",
+        )])
+    if selected_panel_id:
+        buttons.append([InlineKeyboardButton(
+            text="🚫 حذف اتصال پنل",
+            callback_data=f"vipplanpanelclear|{plan_key}",
+            style="danger",
+        )])
+    buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"vipplan_{plan_key}", style="primary")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def admin_vip_plan_panel_template_keyboard(plan_key: str, panel_id: int, templates=None):
+    """انتخاب User Template پاسارگارد برای پلن VIP."""
+    buttons = []
+    for template in (templates or []):
+        if not isinstance(template, dict) or template.get("id") is None:
+            continue
+        tid = template.get("id")
+        name = template.get("name") or template.get("remark") or str(tid)
+        buttons.append([InlineKeyboardButton(
+            text=f"📦 {name}",
+            callback_data=f"vipplanpaneltemplate|{plan_key}|{panel_id}|{tid}",
+            style="primary",
+        )])
+    if not buttons:
+        buttons.append([InlineKeyboardButton(
+            text="⚠️ تمپلیتی پیدا نشد",
+            callback_data=f"vipplanpanel|{plan_key}",
+            style="danger",
+        )])
+    buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"vipplanpanel|{plan_key}", style="primary")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+# ---------------------------------------------------------------------------
+# 🔀 انتخاب پنل VPN فعال (وقتی هردو پنل مرزبان و پاسارگارد متصل باشند)
+# ---------------------------------------------------------------------------
+def admin_panel_choose_menu(available: list, active: str | None):
+    buttons=[]
+    for key in available:
+        label = vpn_panel.panel_label(key)
+        mark=" ✅" if key==active else ""
+        buttons.append([InlineKeyboardButton(text=f"{label}{mark}",callback_data=f"panelchoose_{key}",style="success" if key==active else "primary")])
+    buttons.append([InlineKeyboardButton(text="🔙 بازگشت",callback_data="admin_back",style="primary")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
