@@ -1,9 +1,9 @@
 """
 handlers/panel_admin.py
-مدیریت یکپارچه‌شده‌ی پنل‌های مرزبان / پاسارگارد / 3X-UI.
+مدیریت یکپارچه‌شده‌ی هر سه نوع پنل (شاهراه / مرزبان / پاسارگارد).
 
 ⚠️ جایگزین handlers/shahrah_admin.py قدیمی (یکپنلی، فقط شاهراه). این ماژول:
-- پنل‌های مرزبان، پاسارگارد و 3X-UI را پشتیبانی می‌کند (هرکدام می‌توانند هم‌زمان فعال باشند).
+- هر سه نوع پنل را هم‌زمان پشتیبانی می‌کند (هر سه در یک لحظه می‌توانند فعال باشند).
 - هر نوع پنل می‌تواند چند نمونه (Instance) هم‌زمان داشته باشد (مدیریت در دکمه‌های جداگانه).
 - نگاشت پلن/بسته در سطح "کدام نمونه‌ی پنل" انجام می‌شود (تا ادمین بتواند برای هر پلن/بسته تعیین
   کند دقیقاً از کدام نمونه‌ی پنل استفاده شود).
@@ -28,8 +28,41 @@ import re
 import secrets
 import string
 from datetime import datetime, timedelta
-from subscription import format_service_package, days_remaining
+from subscription import days_remaining
 from io import BytesIO
+
+
+def format_service_package(volume_gb, days, plan_key=None):
+    """Format traffic/duration for panel-admin messages without depending on subscription.py."""
+    try:
+        volume = float(volume_gb or 0)
+    except (TypeError, ValueError):
+        volume = 0.0
+
+    if volume > 0 and volume < 1:
+        volume_text = f"{volume * 1024:.0f} مگابایت"
+    elif volume > 0:
+        volume_text = f"{volume:g} گیگ"
+    else:
+        volume_text = "نامحدود"
+
+    try:
+        total_days = float(days)
+    except (TypeError, ValueError):
+        total_days = 0.0
+
+    if total_days > 0 and total_days < 1:
+        hours = max(1, round(total_days * 24))
+        days_text = f"{hours} ساعت"
+    elif total_days > 0:
+        if total_days.is_integer():
+            days_text = f"{int(total_days)} روز"
+        else:
+            days_text = f"{total_days:g} روز"
+    else:
+        days_text = "نامحدود"
+
+    return volume_text, days_text
 
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
@@ -323,7 +356,7 @@ async def open_vpn_panel_types(callback: types.CallbackQuery):
         return
     await callback.message.edit_text(
         "🖥 مدیریت پنل‌های VPN\n\n"
-        "پنل‌های مرزبان، پاسارگارد و 3X-UI می‌توانند هم‌زمان فعال باشند و هرکدام می‌توانند چند نمونه داشته باشند.\n"
+        "هر سه نوع پنل (شاهراه/مرزبان/پاسارگارد) می‌توانند هم‌زمان فعال باشند و هرکدام می‌تواند چند نمونه داشته باشد.\n"
         "یک نوع رو انتخاب کن:",
         reply_markup=admin_vpn_panel_types_keyboard(),
     )
@@ -336,7 +369,7 @@ async def menu_admin_vpn_panels(message: types.Message):
         return
     await message.answer(
         "🖥 مدیریت پنل‌های VPN\n\n"
-        "پنل‌های مرزبان، پاسارگارد و 3X-UI می‌توانند هم‌زمان فعال باشند و هرکدام می‌توانند چند نمونه داشته باشند.\n"
+        "هر سه نوع پنل (شاهراه/مرزبان/پاسارگارد) می‌توانند هم‌زمان فعال باشند و هرکدام می‌تواند چند نمونه داشته باشد.\n"
         "یک نوع رو انتخاب کن:",
         reply_markup=admin_vpn_panel_types_keyboard(),
     )
