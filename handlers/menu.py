@@ -150,7 +150,7 @@ def _admin_perm(user_id: int, permission: str) -> bool:
 # ---------------------------------------------------------------------------
 # منوی کاربر عادی — دکمه‌های تجمیعی Reply Keyboard
 # ---------------------------------------------------------------------------
-@router.message(F.text == "🟢 تست / خرید اشتراک")
+@router.message(F.text.in_({"تست", "خرید اشتراک"}))
 async def menu_buy_or_test(message: types.Message, state: FSMContext):
     await state.clear()
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -164,7 +164,7 @@ async def menu_buy_or_test(message: types.Message, state: FSMContext):
     )
 
 
-@router.message(F.text == "🟢 کیف پول / تمدید")
+@router.message(F.text.in_({"کیف پول", "تمدید"}))
 async def menu_wallet_or_renew(message: types.Message, state: FSMContext):
     await state.clear()
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -178,7 +178,7 @@ async def menu_wallet_or_renew(message: types.Message, state: FSMContext):
     )
 
 
-@router.message(F.text == "🔵 پروفایل / سرویس‌های من")
+@router.message(F.text.in_({"پروفایل", "سرویس‌های من"}))
 async def menu_profile_or_configs(message: types.Message, state: FSMContext):
     await state.clear()
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -192,7 +192,7 @@ async def menu_profile_or_configs(message: types.Message, state: FSMContext):
     )
 
 
-@router.message(F.text == "🔵 راهنما / پشتیبانی")
+@router.message(F.text.in_({"راهنما", "پشتیبانی"}))
 async def menu_guides_or_support(message: types.Message, state: FSMContext):
     await state.clear()
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -206,7 +206,7 @@ async def menu_guides_or_support(message: types.Message, state: FSMContext):
     )
 
 
-@router.message(F.text == "🔴 نمایندگی / دعوت دوستان")
+@router.message(F.text.in_({"نمایندگی", "دعوت دوستان"}))
 async def menu_agency_or_referral(message: types.Message, state: FSMContext):
     await state.clear()
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
