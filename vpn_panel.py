@@ -9,6 +9,10 @@ def available_panels(): return ["pasargad"] if db.list_vpn_panels("pasargad", Tr
 def get_default_panel_id():
     panels = db.list_vpn_panels("pasargad", True)
     return int(panels[0]["id"]) if panels else None
+
+def active_panel():
+    """سازگاری با مسیرهای قدیمی: پنل فعال فعلی را برمی‌گرداند."""
+    return get_panel(get_default_panel_id())
 def list_panels(enabled_only=False): return db.list_vpn_panels("pasargad", enabled_only)
 def get_panel(panel_id=None):
     if panel_id is not None:
