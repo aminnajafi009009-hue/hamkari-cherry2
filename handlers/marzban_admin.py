@@ -185,7 +185,7 @@ def _admin_fsm(bot) -> FSMContext | None:
 # ---------------------------------------------------------------------------
 async def auto_fulfill_vip_via_marzban(bot, uid, plan_key: str, order_id: int | None) -> bool:
     mapping = db.get_panel_map_for_plan_key(plan_key)
-    if not mapping or not mapping.get("panel_id"):
+    if not mapping or not mapping.get("panel_id") or not mapping.get("remote_ref"):
         return False
 
     plan = db.get_effective_plan(plan_key)
@@ -196,7 +196,7 @@ async def auto_fulfill_vip_via_marzban(bot, uid, plan_key: str, order_id: int | 
     panel_id = int(mapping["panel_id"])
     # در نگاشت پاسارگارد، remote_ref همان ID تمپلیت پنل است. برای
     # سازگاری با رکوردهای قدیمی، plan_slug هم به‌عنوان fallback پذیرفته می‌شود.
-    template_id = mapping.get("remote_ref") or mapping.get("plan_slug")
+    template_id = mapping.get("remote_ref")
     if template_id is None:
         return False
     panel_label = vpn_panel.panel_label(panel_id)
@@ -213,7 +213,7 @@ async def auto_fulfill_vip_via_marzban(bot, uid, plan_key: str, order_id: int | 
             ADMIN_ID,
             f"⚠️ خرید VIP (کیف‌پول/پرداخت آنلاین) قرار بود خودکار از پنل {panel_label} ارسال شود ولی "
             f"ساخت سرویس در پنل ناموفق بود:\n{msg}\n"
-            f"🔑 Template ID ارسال‌شده: {template_id}\n\n"
+            f"🔑 Template ID ارسال‌شده: {mapping.get('remote_ref')}\n\n"
             "لطفاً از دکمه‌ی ارسال دستی زیر همین سفارش استفاده کن. "
             "اگه خطا NOT_FOUND بود، احتمالاً باید این نگاشت رو دوباره از منوی پنل فعال تنظیم کنی (توجه: نگاشت بسته به پنل فعلی بستگی دارد — اگر پنل فعال را عوض کردید، باید دوباره از روی همان پنل نگاشت کنید).",
         )
@@ -273,7 +273,7 @@ async def auto_fulfill_custom_via_marzban(bot, user: dict, order_id: int, volume
             ADMIN_ID,
             f"⚠️ سفارش «بساز سرویس خودت» (کیف‌پول/پرداخت آنلاین) قرار بود خودکار از پنل {panel_label} ارسال "
             f"شود ولی ساخت سرویس ناموفق بود:\n{msg}\n"
-            f"🔑 Template ID ارسال‌شده: {template_id}\n\n"
+            f"🔑 Template ID ارسال‌شده: {mapping.get('remote_ref')}\n\n"
             "لطفاً از دکمه‌ی ارسال دستی این سفارش استفاده کن. "
             "اگه خطا NOT_FOUND بود، از «🧩 نگاشت پیش‌فرض بساز سرویس خودت» دوباره یه بسته‌ی معتبر از روی همان پنل فعلی انتخاب کن.",
         )
@@ -611,23 +611,79 @@ async def marzban_map_plan_set(callback: types.CallbackQuery, state: FSMContext)
 # ---------------------------------------------------------------------------
 @router.callback_query(F.data.startswith("marzbansend|"))
 async def marzban_send_service(callback: types.CallbackQuery, state: FSMContext):
-    """ارسال خودکار بر اساس نگاشت همان پلن؛ دیگر «پنل فعال» وجود ندارد."""
+    # 🐛 فیکس: این دکمه دقیقاً کنار دکمه‌ی دستی «🚀 ارسال کانفیگ VIP (QR) — دستی» (sendvip_)
+    # در همان پیام نمایش داده می‌شود و آن دکمه فقط با _is_admin چک می‌شد؛ قبلاً اینجا مجوز
+    # جداگانه‌ای "vpn_panel" چک می‌شد و برای ادمین فرعی‌ای که فقط مجوز پیگیری سفارشات (requests)
+    # داشت و مجوز جداگانه‌ی تنظیمات پنل VPN را نداشت، این دکمه بی‌پاسخ می‌ماند. حالا
+    # مثل همان دکمه‌ی دستی، فقط _is_admin (ادمین اصلی یا هر ادمین فرعی) چک می‌شود.
     if not _is_admin(callback.from_user.id):
         await callback.answer("⛔ دسترسی ندارید.", show_alert=True)
         return
     if is_duplicate_action(f"marzbansend_{callback.data}"):
         await callback.answer("⚠️ این عملیات چند لحظه پیش انجام شد.", show_alert=True)
         return
+
     _, uid, plan_key, order_id_str = callback.data.split("|")
     order_id = int(order_id_str) if order_id_str and order_id_str != "0" else None
-    await callback.answer("⏳ در حال ساخت سرویس طبق نگاشت پلن...")
-    from handlers.panel_admin import auto_fulfill_vip_via_panel
-    ok = await auto_fulfill_vip_via_panel(callback.bot, uid, plan_key, order_id)
+
+    plan = db.get_effective_plan(plan_key)
+    user = db.get_user(uid)
+    if not plan or not user:
+        await callback.answer("❌ کاربر یا پلن یافت نشد.", show_alert=True)
+        return
+
+    # نگاشت جدید پنل مشخص می‌کند سرویس دقیقاً در کدام پنل و با کدام Template ساخته شود.
+    mapping = db.get_panel_map_for_plan_key(plan_key)
+    if not mapping or not mapping.get("panel_id") or not mapping.get("remote_ref"):
+        await callback.answer("❌ برای این پلن/تست هنوز Template پنل نگاشت نشده.", show_alert=True)
+        return
+
+    await callback.answer("⏳ در حال ساخت سرویس در پنل...")
+    panel_id = int(mapping["panel_id"])
+    panel = vpn_panel.get_panel(panel_id)
+    if not panel:
+        await callback.answer("❌ پنل نگاشت‌شده فعال/موجود نیست.", show_alert=True); return
+    username = _generate_service_username()
+    # 🆕 فیکس: حجم/مدت دقیقاً از روی خود پلن (plan['volume_gb']/plan['days']) گرفته می‌شود، نه از روی تمپلیت نگاشت‌شده.
+    # 🆕 فیکس HWID Limit: سقف کاربر همزمان خود پلن (plan['user_limit']) همراه با ساخت سرویس به پنل فرستاده می‌شود.
+    ok, data, msg = await vpn_panel.create_user_custom(
+        int(mapping["remote_ref"]), username, plan.get("volume_gb"), plan.get("days"),
+        device_limit=plan.get("user_limit"), panel_id=panel_id,
+    )
     if not ok:
-        await callback.message.answer(
-            "❌ برای این پلن یک پنل فعال/نگاشت معتبر پیدا نشد یا ساخت سرویس ناموفق بود.\n"
-            "از «🖥️ مدیریت پنل‌های VPN» نگاشت پلن را بررسی کنید."
+        await answer_rich(callback.message, 
+            f"❌ ساخت سرویس در پنل مرزبان ناموفق بود: {msg}\n\n"
+            f"🔑 planSlug ارسال‌شده: <code>{html.escape(str(mapping.get('remote_ref') or ''))}</code> "
+            f"(نگاشت‌شده به‌عنوان «{html.escape(mapping.get('plan_name') or '')}»)\n"
+            "اگه این پیام SERVICE_NOT_FOUND/NOT_FOUND می‌ده، احتمالاً این بسته توی پنل مرزبان حذف/rename شده؛ "
+            "از «📦 مشاهده بسته‌های مرزبان» یک بار slug فعلی رو چک کن و در صورت نیاز دوباره نگاشت کن.",
+            parse_mode="HTML",
         )
+        return
+
+    link, slug = vpn_panel.extract_link_and_username(data)
+    actual_volume_gb = _actual_volume_gb_from_panel_response(data, plan.get("volume_gb"))
+    snapshot = {"name": plan.get("name"), "volume_gb": actual_volume_gb, "days": plan.get("days"), "user_limit": plan.get("user_limit")}
+    ctx = {"uid": uid, "plan_key": plan_key, "order_id": order_id, "order_kind": "plan",
+           "slug": slug, "snapshot": snapshot, "panel_id": panel_id}
+
+    if not link:
+        await answer_rich(callback.message, f"📨 پاسخ پنل مرزبان:\n<pre>{_pretty(data)}</pre>", parse_mode="HTML")
+        await state.update_data(marzban_pending_ctx=ctx)
+        await state.set_state(AdminStates.waiting_marzban_manual_link)
+        await answer_rich(callback.message, 
+            "⚠️ سرویس در پنل مرزبان ساخته شد ولی نتونستم لینک ساب رو خودکار پیدا کنم.\n"
+            "لطفاً لینک ساب رو از پاسخ بالا کپی و همینجا ارسال کن:"
+        )
+        return
+
+    # 🆕 فیکس سرعت: دامپ خام پاسخ پنل را همزمان با ارسال واقعی کانفیگ برای مشتری اجرا می‌کنیم
+    # تا مشتری منتظر پیام فقط-ادمینی نماند.
+    await asyncio.gather(
+        asyncio.ensure_future(callback.message.answer(f"📨 پاسخ پنل مرزبان:\n<pre>{_pretty(data)}</pre>", parse_mode="HTML")),
+        asyncio.ensure_future(_deliver_marzban_link(callback.bot, ctx, link)),
+    )
+
 
 @router.callback_query(F.data.startswith("marzbancustom_"))
 async def marzban_custom_start(callback: types.CallbackQuery, state: FSMContext):
