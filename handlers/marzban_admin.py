@@ -194,12 +194,17 @@ async def auto_fulfill_vip_via_marzban(bot, uid, plan_key: str, order_id: int | 
         return False
 
     panel_id = int(mapping["panel_id"])
+    # در نگاشت پاسارگارد، remote_ref همان ID تمپلیت پنل است. برای
+    # سازگاری با رکوردهای قدیمی، plan_slug هم به‌عنوان fallback پذیرفته می‌شود.
+    template_id = mapping.get("remote_ref") or mapping.get("plan_slug")
+    if template_id is None:
+        return False
     panel_label = vpn_panel.panel_label(panel_id)
     username = _generate_service_username()
-    # 🆕 فیکس: قبلاً اینجا create_user_from_template صدا زده می‌شد که حجم/مدت را از روی خود تمپلیت مرزبان می‌خواند — یعنی اگر تمپلیت با حجم/مدت پلن هماهنگ نبود، مشتری حجم/مدت اشتباه می‌گرفت. الان از create_user_custom استفاده می‌شود که حجم/مدت را دقیقاً از روی خود پلن (plan['volume_gb']/plan['days']) می‌گیرد؛ تمپلیت فقط برای تنظیمات پروتکل/استخر ترافیک به کار می‌رود.
-    # 🆕 فیکس HWID Limit: سقف کاربر همزمان خود پلن (plan['user_limit']) همراه با ساخت سرویس به پنل فرستاده می‌شود.
+    # Template فقط تنظیمات پنل (پروتکل/این‌باند/گروه) را تأمین می‌کند؛
+    # حجم، مدت و HWID دقیقاً از پلن فروش ربات اعمال می‌شوند.
     ok, data, msg = await vpn_panel.create_user_custom(
-        int(mapping["plan_slug"]), username, plan.get("volume_gb"), plan.get("days"),
+        int(template_id), username, plan.get("volume_gb"), plan.get("days"),
         device_limit=plan.get("user_limit"),
         panel_id=panel_id,
     )
@@ -208,7 +213,7 @@ async def auto_fulfill_vip_via_marzban(bot, uid, plan_key: str, order_id: int | 
             ADMIN_ID,
             f"⚠️ خرید VIP (کیف‌پول/پرداخت آنلاین) قرار بود خودکار از پنل {panel_label} ارسال شود ولی "
             f"ساخت سرویس در پنل ناموفق بود:\n{msg}\n"
-            f"🔑 planSlug ارسال‌شده: {mapping['plan_slug']}\n\n"
+            f"🔑 Template ID ارسال‌شده: {template_id}\n\n"
             "لطفاً از دکمه‌ی ارسال دستی زیر همین سفارش استفاده کن. "
             "اگه خطا NOT_FOUND بود، احتمالاً باید این نگاشت رو دوباره از منوی پنل فعال تنظیم کنی (توجه: نگاشت بسته به پنل فعلی بستگی دارد — اگر پنل فعال را عوض کردید، باید دوباره از روی همان پنل نگاشت کنید).",
         )
@@ -268,7 +273,7 @@ async def auto_fulfill_custom_via_marzban(bot, user: dict, order_id: int, volume
             ADMIN_ID,
             f"⚠️ سفارش «بساز سرویس خودت» (کیف‌پول/پرداخت آنلاین) قرار بود خودکار از پنل {panel_label} ارسال "
             f"شود ولی ساخت سرویس ناموفق بود:\n{msg}\n"
-            f"🔑 planSlug ارسال‌شده: {mapping['plan_slug']}\n\n"
+            f"🔑 Template ID ارسال‌شده: {template_id}\n\n"
             "لطفاً از دکمه‌ی ارسال دستی این سفارش استفاده کن. "
             "اگه خطا NOT_FOUND بود، از «🧩 نگاشت پیش‌فرض بساز سرویس خودت» دوباره یه بسته‌ی معتبر از روی همان پنل فعلی انتخاب کن.",
         )
@@ -339,9 +344,9 @@ async def _fetch_plan_choices() -> tuple[list[dict], str]:
 def _marzban_hub_warn() -> str:
     """هشدار وضعیت اتصال — بر اساس پنل واقعاً فعال (مرزبان یا پاسارگارد)، نه
     فقط مرزبان؛ چون این هاب برای هرکدام از دو پنل که فعال باشد کار می‌کند."""
-    panel = vpn_panel.get_panel()
+    panel = vpn_panel.active_panel()
     if panel:
-        label = vpn_panel.panel_label(panel)
+        label = vpn_panel.PANEL_LABELS.get(panel, panel)
         return f"\n\n✅ پنل فعال فعلی: {label}"
     return "\n\n⚠️ هیچ پنل VPNی وصل نیست. اول از «🔗 اتصال پنل مرزبان» یا «🛡️ اتصال پنل پاسارگارد» یکی رو وصل کن."
 
@@ -403,7 +408,7 @@ async def marzban_plans(callback: types.CallbackQuery):
     if not choices:
         await answer_rich(callback.message, f"❌ {msg}", reply_markup=marzban_back_keyboard())
         return
-    panel_label = vpn_panel.panel_label(vpn_panel.get_panel())
+    panel_label = vpn_panel.panel_label(vpn_panel.active_panel())
     lines = [f"• {c['name']}\n  slug: <code>{html.escape(c['slug'])}</code>" for c in choices]
     text = f"📦 بسته‌های فعال برند در پنل {panel_label}:\n\n" + "\n\n".join(lines)
     text += (
