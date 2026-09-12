@@ -21,7 +21,7 @@ PANEL_TYPE_LABELS = {
     "threexui": "3X-UI",
 }
 
-PANEL_TYPES = list(PANEL_TYPE_LABELS.keys())
+PANEL_TYPES = ("marzban", "pasargad", "threexui")
 
 # 🆕 روش‌های اتصال پشتیبانی‌شده برای هر نوع پنل.
 # (پیش‌فرض قدیمی) و هم یک API Key ثابت را پشتیبانی می‌کنند و ادمین از پنل
