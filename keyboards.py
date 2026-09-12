@@ -196,11 +196,11 @@ def join_channels_keyboard(channels):
 def main_reply_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=db.get_text_override("main_buy", "🛒 خرید اشتراک"), style="success"), KeyboardButton(text=db.get_text_override("main_free_test", "🎁 تست رایگان"), style="success")],
-            [KeyboardButton(text=db.get_text_override("main_configs", "📱 سرویس‌های من"), style="primary"), KeyboardButton(text=db.get_text_override("main_wallet", "💰 کیف پول"), style="primary")],
-            [KeyboardButton(text=db.get_text_override("main_referral", "👥 دعوت دوستان"), style="primary"), KeyboardButton(text=db.get_text_override("main_profile", "👤 پروفایل من"), style="primary")],
-            [KeyboardButton(text=db.get_text_override("main_renew", "🔁 تمدید سرویس"), style="success"), KeyboardButton(text=db.get_text_override("main_support", "👨‍💻 پشتیبانی"), style="primary")],
-            [KeyboardButton(text=db.get_text_override("main_guides", "📚 راهنما"), style="primary"), KeyboardButton(text=t("main_agency"), style="primary")],
+            [KeyboardButton(text="تست", style="success"), KeyboardButton(text="خرید اشتراک", style="success")],
+            [KeyboardButton(text="کیف پول", style="success"), KeyboardButton(text="تمدید", style="success")],
+            [KeyboardButton(text="پروفایل", style="primary"), KeyboardButton(text="سرویس‌های من", style="primary")],
+            [KeyboardButton(text="راهنما", style="primary"), KeyboardButton(text="پشتیبانی", style="primary")],
+            [KeyboardButton(text="نمایندگی", style="danger"), KeyboardButton(text="دعوت دوستان", style="danger")],
         ],
         resize_keyboard=True,
         # منوی ربات توسط کلاینت تلگرام قابل باز/بسته شدن باشد.
@@ -1611,11 +1611,11 @@ def admin_vpn_panel_types_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def admin_vpn_panel_list_keyboard(panel_type: str, panels: list[dict]):
+def admin_vpn_panel_list_keyboard(panel_type: str, panel_list: list[dict]):
     """لیست نمونه‌های ساخته‌شده از یک نوع پنل (می‌توانند چندتایی باشند
     و همه هم‌زمان فعال بمانند) + دکمه‌ی افزودن نمونه‌ی جدید."""
     buttons = []
-    for p in panels:
+    for p in panel_list:
         mark = "🟢" if p.get("enabled") else "🔴"
         buttons.append([InlineKeyboardButton(
             text=f"{mark} {p['name']}", callback_data=f"vpndetail|{p['id']}", style="primary"
