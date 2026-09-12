@@ -1215,23 +1215,13 @@ async def _apply_admin_renewal(receipt):
     if not user or not cfg or cfg.get("user_id") != user.get("id") or not cfg.get("service_id"):
         return False, "سرویس تمدیدی دیگر پیدا نشد."
     volume=float(payload.get("volume_gb") or 0); days=int(payload.get("days") or 0)
-    # تمدید باید دقیقاً روی همان پنلی انجام شود که سرویس اولیه روی آن ساخته شده.
-    panel_id = cfg.get("panel_id")
-    if not panel_id:
-        return False, "پنل سازنده‌ی این سرویس در اطلاعات سرویس ثبت نشده است."
-    ok, panel_data, msg=await vpn_panel.renew_user_additive(
-        cfg["service_id"], volume, days, panel_id=int(panel_id)
-    )
+    ok, panel_data, msg=await vpn_panel.renew_user_additive(cfg["service_id"],volume,days,source=cfg.get("source"),panel_id=cfg.get("panel_id"))
     if not ok: return False,msg
     try:
         exp=panel_data.get("expire") if isinstance(panel_data,dict) else None
         expiry=(datetime.fromtimestamp(int(exp),tz=TEHRAN_TZ).replace(tzinfo=None).strftime("%Y-%m-%d") if exp else None)
     except Exception: expiry=cfg.get("expiry")
-    db.update_config(
-        cfg["id"], cfg.get("plan") or "سرویس", cfg.get("config"),
-        expiry=expiry, service_id=cfg.get("service_id"),
-        qr_file_id=cfg.get("qr_file_id"), panel_id=int(panel_id),
-    )
+    db.update_config(cfg["id"],cfg.get("plan") or "سرویس",cfg.get("config"),expiry=expiry,service_id=cfg.get("service_id"),qr_file_id=cfg.get("qr_file_id"),panel_id=cfg.get("panel_id"))
     return True,(volume,days,expiry)
 
 @router.callback_query(F.data.startswith("approverenew|"))
@@ -1526,29 +1516,11 @@ async def _finalize_send(message: types.Message, state: FSMContext):
     encrypted = crypto.encrypt_config(sub_link)
     plan_name = f"{name} | {volume_text} | {days_text}"
 
-    # ارسال دستیِ خرید هم باید پنل مقصد همان پلن را در سرویس ثبت کند تا تمدید
-    # بعداً دقیقاً به همان پنل برگردد.
-    delivery_panel_id = None
-    if plan_order_id:
-        try:
-            po = db.get_order(plan_order_id)
-            if po and po.get("plan_key"):
-                mapping = db.get_panel_map_for_plan_key(po["plan_key"])
-                delivery_panel_id = mapping.get("panel_id") if mapping else None
-        except Exception:
-            delivery_panel_id = None
-
     if target_config_id:
-        db.update_config(
-            target_config_id, plan_name, encrypted, expiry=expiry_date,
-            qr_file_id=qr_file_id, panel_id=delivery_panel_id,
-        )
+        target_cfg = db.get_config_by_id(int(target_config_id))
+        db.update_config(target_config_id, plan_name, encrypted, expiry=expiry_date, qr_file_id=qr_file_id, panel_id=(target_cfg.get("panel_id") if target_cfg else None))
     else:
-        db.add_config(
-            user["id"], plan_name, encrypted, expiry=expiry_date,
-            config_type="vip", qr_file_id=qr_file_id, panel_id=delivery_panel_id,
-            source="pasargad" if delivery_panel_id else "manual",
-        )
+        db.add_config(user["id"], plan_name, encrypted, expiry=expiry_date, config_type="vip", qr_file_id=qr_file_id)
 
     if order_id:
         db.set_custom_order_status(order_id, "fulfilled")
