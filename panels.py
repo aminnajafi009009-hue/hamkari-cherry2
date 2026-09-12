@@ -24,7 +24,7 @@ PANEL_TYPE_LABELS = {
     "threexui": "3X-UI",
 }
 
-PANEL_TYPES = list(PANEL_TYPE_LABELS.keys())
+PANEL_TYPES = ["marzban", "pasargad", "threexui"]
 
 # 🆕 کدام نوع پنل کدام روش‌های اتصال را پشتیبانی می‌کند. شاهراه از ابتدا فقط
 # با API Key کار می‌کند (تغییری نکرده). مرزبان/پاسارگارد/3X-UI هم یوزرنیم/پسورد
