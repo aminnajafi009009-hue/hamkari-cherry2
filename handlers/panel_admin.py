@@ -124,13 +124,11 @@ async def panel_map_test(c):
         return await c.answer('پنل پیدا نشد.', show_alert=True)
     ok, templates, msg = await vpn_panel.get_templates(pid)
     if not ok:
-        return await c.answer('خطا در دریافت Templateها: '+str(msg), show_alert=True)
+        return await c.answer('خطا در دریافت Templateها: ' + str(msg), show_alert=True)
     row = db.get_panel_plan_map('free_test', 0)
     current_ref = row.get('remote_ref') if row and str(row.get('panel_id')) == str(pid) else None
     await c.message.edit_text(
-        f"🧪 <b>Template تست رایگان</b>\n\n"
-        f"پنل: <b>{panel.get('name') or pid}</b>\n"
-        "یکی از Templateهای همین پنل را برای تست رایگان انتخاب کن:",
+        f"🧪 <b>Template تست رایگان</b>\n\nپنل: <b>{panel.get('name') or pid}</b>\nیکی از Templateهای همین پنل را برای تست رایگان انتخاب کن:",
         reply_markup=admin_pasargad_panel_template_map_keyboard(pid, 0, templates, current_ref),
     )
     await c.answer()
@@ -141,39 +139,29 @@ async def panel_map_template(c):
     _, pid, scope_id, tid = c.data.split('|')
     pid, scope_id, tid = int(pid), int(scope_id), int(tid)
     panel = db.get_vpn_panel(pid)
-    if scope_id == 0:
-        ok, template, msg = await vpn_panel.get_template(tid, pid)
-        if not panel or not ok:
-            return await c.answer('Template پیدا نشد: '+str(msg), show_alert=True)
-        template_name = template.get('name') or template.get('remark') or str(tid)
-        db.set_panel_plan_map('free_test', 0, pid, str(tid), template_name)
-        await c.answer('✅ نگاشت تست رایگان ذخیره شد.', show_alert=True)
-        await c.message.edit_text(
-            f"✅ تست رایگان به Template «{template_name}» پنل «{panel.get('name') or pid}» متصل شد.",
-            reply_markup=admin_pasargad_panel_mapping_keyboard(
-                pid, list(db.get_all_vip_plans_flat().values()),
-                {int(p['scope_id']): p for p in db.list_panel_plan_maps('vip_plan') if str(p.get('panel_id')) == str(pid)},
-                page=0,
-            ),
-        )
-        return
-    # رفتار قبلی برای پلن‌های VIP
-    plan_id = scope_id
-    plan = next((p for p in db.get_all_vip_plans_flat().values() if int(p.get('id')) == plan_id), None)
-    if not panel or not plan:
-        return await c.answer('پنل یا پلن پیدا نشد.', show_alert=True)
+    if not panel:
+        return await c.answer('پنل پیدا نشد.', show_alert=True)
     ok, template, msg = await vpn_panel.get_template(tid, pid)
     if not ok:
-        return await c.answer('Template پیدا نشد: '+str(msg), show_alert=True)
+        return await c.answer('Template پیدا نشد: ' + str(msg), show_alert=True)
     template_name = template.get('name') or template.get('remark') or str(tid)
+    if scope_id == 0:
+        db.set_panel_plan_map('free_test', 0, pid, str(tid), template_name)
+        await c.answer('✅ نگاشت تست رایگان ذخیره شد.', show_alert=True)
+        all_plans = list(db.get_all_vip_plans_flat().values())
+        mappings = {int(x['scope_id']): x for x in db.list_panel_plan_maps('vip_plan') if str(x.get('panel_id')) == str(pid)}
+        await c.message.edit_text('✅ تست رایگان به Template «' + template_name + '» پنل «' + (panel.get('name') or str(pid)) + '» متصل شد.', reply_markup=admin_pasargad_panel_mapping_keyboard(pid, all_plans, mappings, page=0))
+        return
+    plan_id = scope_id
+    plan = next((x for x in db.get_all_vip_plans_flat().values() if int(x.get('id')) == plan_id), None)
+    if not plan:
+        return await c.answer('پلن پیدا نشد.', show_alert=True)
     db.set_panel_plan_map('vip_plan', plan_id, pid, str(tid), template_name)
     await c.answer('✅ نگاشت ذخیره شد.', show_alert=True)
     await c.message.edit_text(
-        f"✅ پلن «{plan.get('name')}» از این به بعد از Template «{template_name}» پنل «{panel.get('name') or pid}» تغذیه می‌شود.",
-        reply_markup=admin_pasargad_panel_mapping_keyboard(
-            pid, list(db.get_all_vip_plans_flat().values()),
-            {int(plan_id): db.get_panel_plan_map('vip_plan', plan_id)}, page=0
-        ),
+        f"✅ پلن «{plan.get('name')}» از این به بعد از Template «{template_name}» پنل «{panel.get('name') or pid}» تغذیه می‌شود.\n\n"
+        "هنگام ساخت سرویس، تنظیمات Template از پنل خوانده می‌شود و حجم/مدت/HWID از خود پلن ربات اعمال می‌شود.",
+        reply_markup=admin_pasargad_panel_mapping_keyboard(pid, list(db.get_all_vip_plans_flat().values()), {int(plan_id): db.get_panel_plan_map('vip_plan', plan_id)}, page=0),
     )
 
 @router.callback_query(F.data.startswith('pp_mapclear|'))
@@ -181,10 +169,9 @@ async def panel_map_clear(c):
     if not _is_admin(c.from_user.id): return
     _, pid, plan_id = c.data.split('|')
     pid, plan_id = int(pid), int(plan_id)
-    scope = 'free_test' if plan_id == 0 else 'vip_plan'
-    row = db.get_panel_plan_map(scope, plan_id)
+    row = db.get_panel_plan_map('vip_plan', plan_id)
     if row and str(row.get('panel_id')) == str(pid):
-        db.delete_panel_plan_map(scope, plan_id)
+        db.delete_panel_plan_map('vip_plan', plan_id)
     await c.answer('🗑 نگاشت حذف شد.', show_alert=True)
     all_plans = list(db.get_all_vip_plans_flat().values())
     all_plans.sort(key=lambda x: (int(x.get('category_id') or 0), int(x.get('sort_order') or 0), int(x.get('id') or 0)))
@@ -221,14 +208,3 @@ async def clear(c):
     key=c.data.split('|',1)[1]; plan=db.get_vip_plan(key)
     if plan: db.delete_panel_plan_map('vip_plan',plan['id'])
     cat=db.get_vip_category(plan['category_id']); await c.message.edit_text('🚫 اتصال پنل این پلن حذف شد.',reply_markup=admin_vip_plan_detail_keyboard(key,cat['key'])); await c.answer()
-
-# ---------------------------------------------------------------------------
-# Compatibility bridge
-# ---------------------------------------------------------------------------
-# Some versions of handlers/plans.py import the generic VIP fulfillment
-# entry-point from this module. Keep that public API here while the actual
-# implementation lives in marzban_admin and routes through vpn_panel, which
-# already supports the selected PasarGuard panel/template mapping.
-async def auto_fulfill_vip_via_panel(bot, uid, plan_key: str, order_id: int | None) -> bool:
-    from handlers.marzban_admin import auto_fulfill_vip_via_marzban
-    return await auto_fulfill_vip_via_marzban(bot, uid, plan_key, order_id)
