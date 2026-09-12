@@ -1607,10 +1607,11 @@ def admin_permissions_keyboard(admin_id: str, selected=None):
 # فعال هستند و هر کدام می‌تواند چند نمونه (Instance) هم‌زمان داشته باشد.
 # ---------------------------------------------------------------------------
 def admin_vpn_panel_types_keyboard():
-    """قدم اول: انتخاب نوع پنل برای مدیریت. هر سه نوع مستقل هم‌زمان قابل فعال‌شدن هستند."""
+    """انتخاب نوع پنل مدیریت؛ فقط مرزبان، پاسارگارد و 3X-UI."""
+    panel_types = (("marzban", "مرزبان"), ("pasargad", "پاسارگارد"), ("threexui", "3X-UI"))
     buttons = [
-        [InlineKeyboardButton(text=panels.PANEL_TYPE_LABELS[t], callback_data=f"vpntype|{t}", style="primary")]
-        for t in panels.PANEL_TYPES
+        [InlineKeyboardButton(text=label, callback_data=f"vpntype|{ptype}", style="primary")]
+        for ptype, label in panel_types
     ]
     buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin_back", style="primary")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
