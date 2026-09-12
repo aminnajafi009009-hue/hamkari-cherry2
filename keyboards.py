@@ -195,15 +195,10 @@ def join_channels_keyboard(channels):
 def main_reply_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            # 🟢 تست / خرید اشتراک
             [KeyboardButton(text=db.get_text_override("main_free_test", "🎁 تست رایگان"), style="success"), KeyboardButton(text=db.get_text_override("main_buy", "🛒 خرید اشتراک"), style="success")],
-            # 🟢 کیف پول / تمدید
             [KeyboardButton(text=db.get_text_override("main_wallet", "💰 کیف پول"), style="success"), KeyboardButton(text=db.get_text_override("main_renew", "🔁 تمدید سرویس"), style="success")],
-            # 🔵 پروفایل / سرویس‌های من
             [KeyboardButton(text=db.get_text_override("main_profile", "👤 پروفایل من"), style="primary"), KeyboardButton(text=db.get_text_override("main_configs", "📱 سرویس‌های من"), style="primary")],
-            # 🔵 راهنما / پشتیبانی
             [KeyboardButton(text=db.get_text_override("main_guides", "📚 راهنما"), style="primary"), KeyboardButton(text=db.get_text_override("main_support", "👨‍💻 پشتیبانی"), style="primary")],
-            # 🔴 نمایندگی / دعوت دوستان
             [KeyboardButton(text=t("main_agency"), style="danger"), KeyboardButton(text=db.get_text_override("main_referral", "👥 دعوت دوستان"), style="danger")],
         ],
         resize_keyboard=True,
@@ -289,16 +284,13 @@ def all_reply_menu_texts() -> set[str]:
 # منوی اصلی (Inline) — کاربر عادی
 # ---------------------------------------------------------------------------
 def main_menu():
+    """منوی Inline اصلی؛ با منوی Reply Keyboard از نظر ترتیب و رنگ همسان است."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t("main_buy"), callback_data="plans", style="success")],
-        [InlineKeyboardButton(text=t("main_free_test"), callback_data="buy_plan_test", style="success")],
-        [InlineKeyboardButton(text=t("main_configs"), callback_data="my_configs", style="primary")],
-        [InlineKeyboardButton(text=t("main_wallet"), callback_data="wallet", style="primary")],
-        [InlineKeyboardButton(text=t("main_referral"), callback_data="referral", style="primary")],
-        [InlineKeyboardButton(text=t("main_profile"), callback_data="profile", style="primary")],
-        [InlineKeyboardButton(text=t("main_support"), callback_data="support", style="primary")],
-        [InlineKeyboardButton(text=t("main_guides"), callback_data="user_guides", style="primary")],
-       
+        [InlineKeyboardButton(text=t("main_free_test"), callback_data="buy_plan_test", style="success"), InlineKeyboardButton(text=t("main_buy"), callback_data="plans", style="success")],
+        [InlineKeyboardButton(text=t("main_wallet"), callback_data="wallet", style="success"), InlineKeyboardButton(text=t("main_renew"), callback_data="renew", style="success")],
+        [InlineKeyboardButton(text=t("main_profile"), callback_data="profile", style="primary"), InlineKeyboardButton(text=t("main_configs"), callback_data="my_configs", style="primary")],
+        [InlineKeyboardButton(text=t("main_guides"), callback_data="user_guides", style="primary"), InlineKeyboardButton(text=t("main_support"), callback_data="support", style="primary")],
+        [InlineKeyboardButton(text=t("main_agency"), callback_data="agency_request", style="danger"), InlineKeyboardButton(text=t("main_referral"), callback_data="referral", style="danger")],
     ])
 
 
@@ -747,15 +739,12 @@ def admin_purchase_notify_keyboard(uid: str, plan_key: str | None = None, order_
     # باشد، دکمه‌ی «ارسال خودکار از پنل» هم علاوه‌بر روش دستی (که هیچ تغییری
     # نکرده) نمایش داده می‌شود؛ انتخاب نهایی همیشه با ادمین است.
     auto_row = []
-    # نگاشت جدید بر اساس پنل مشخص؛ دیگر به active_panel قدیمی وابسته نیست.
     if plan_key:
         mapping = db.get_panel_map_for_plan_key(plan_key)
-        if mapping and mapping.get("panel_id") and mapping.get("remote_ref"):
+        if mapping and mapping.get("panel_id") and mapping.get("remote_ref") is not None:
             auto_row = [[InlineKeyboardButton(
-                text="📤 ارسال خودکار از پنل",
-                callback_data=f"marzbansend|{uid}|{plan_key}|{oid}",
-                style="success",
-            )]]
+                text="📤 ارسال خودکار از پنل نگاشت‌شده", callback_data=f"marzbansend|{uid}|{plan_key}|{oid}"
+            , style="primary")]]
 
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚀 ارسال کانفیگ VIP (QR) — دستی", callback_data=f"sendvip_{uid}{suffix}", style="primary")],
@@ -1499,21 +1488,11 @@ def admin_pasargad_panel_mapping_keyboard(panel_id: int, plans, mappings=None, p
     page = max(0, min(int(page), total_pages - 1))
     chunk = plans[page * per_page:(page + 1) * per_page]
     buttons = []
-    # تست رایگان نگاشت مستقل از پلن‌های VIP دارد.
-    test_mapping = db.get_panel_plan_map("free_test", 0)
-    if page == 0:
-        if test_mapping and str(test_mapping.get("panel_id")) == str(panel_id):
-            remote_name = test_mapping.get("remote_name") or test_mapping.get("remote_ref") or "تمپلیت"
-            test_label = f"🧪 تست رایگان ← {remote_name}"
-            test_style = "success"
-        else:
-            test_label = "🧪 تست رایگان — بدون نگاشت"
-            test_style = "primary"
-        buttons.append([InlineKeyboardButton(
-            text=test_label,
-            callback_data=f"pp_maptest|{panel_id}",
-            style=test_style,
-        )])
+    # تست رایگان یک نگاشت مستقل دارد و باید در همین صفحه قابل تنظیم باشد.
+    test_map = db.get_panel_plan_map("free_test", 0)
+    test_selected = bool(test_map and str(test_map.get("panel_id")) == str(panel_id))
+    test_label = "🟢 🧪 تست رایگان ← " + str(test_map.get("remote_name") or test_map.get("remote_ref") or "تمپلیت") if test_selected else "🧪 تست رایگان — بدون نگاشت"
+    buttons.append([InlineKeyboardButton(text=test_label, callback_data=f"pp_maptest|{panel_id}", style="success" if test_selected else "primary")])
     for plan in chunk:
         pid = int(plan.get("id"))
         name = plan.get("name") or plan.get("plan_key") or f"پلن {pid}"
