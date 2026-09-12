@@ -1,9 +1,8 @@
 """
 handlers/panel_admin.py
-مدیریت یکپارچه‌شده‌ی هر سه نوع پنل (شاهراه / مرزبان / پاسارگارد).
+مدیریت یکپارچه‌شده‌ی پنل‌های مرزبان / پاسارگارد / 3X-UI.
 
-⚠️ جایگزین handlers/shahrah_admin.py قدیمی (یکپنلی، فقط شاهراه). این ماژول:
-- هر سه نوع پنل را هم‌زمان پشتیبانی می‌کند (هر سه در یک لحظه می‌توانند فعال باشند).
+این ماژول پنل‌های مرزبان، پاسارگارد و 3X-UI را هم‌زمان پشتیبانی می‌کند.
 - هر نوع پنل می‌تواند چند نمونه (Instance) هم‌زمان داشته باشد (مدیریت در دکمه‌های جداگانه).
 - نگاشت پلن/بسته در سطح "کدام نمونه‌ی پنل" انجام می‌شود (تا ادمین بتواند برای هر پلن/بسته تعیین
   کند دقیقاً از کدام نمونه‌ی پنل استفاده شود).
@@ -67,35 +66,31 @@ from utils import is_duplicate_action, now_tehran_naive, parse_int_in_range
 _LATIN_NAME_RE = re.compile(r"^[A-Za-z0-9]{1,32}$")
 from handlers.admin import _is_admin, _log_fulfilled_order, AdminPermissionMiddleware
 
-router = Router(name="panel_admin")
 
 
 def format_service_package(volume_gb, days, plan_key=None):
-    """قالب نمایش حجم/مدت؛ برای تست رایگان مقادیر کوچک را به MB/ساعت نشان می‌دهد.
-    این helper عمداً اینجا نگه داشته شده تا panel_admin به API داخلی subscription وابسته نشود.
-    """
+    """قالب مشترک نمایش حجم/مدت برای مسیرهای مدیریت پنل."""
     try:
-        from config import FREE_TEST_PLAN_KEY
+        v = float(volume_gb or 0)
     except Exception:
-        FREE_TEST_PLAN_KEY = None
-    if plan_key == FREE_TEST_PLAN_KEY and volume_gb is not None and days is not None:
-        volume_mb = round(float(volume_gb) * 1024)
-        if volume_mb < 1024:
-            volume_text = f"{volume_mb} مگابایت"
-        else:
-            gb_value = volume_mb / 1024
-            volume_text = f"{gb_value:.0f} گیگابایت" if gb_value == int(gb_value) else f"{gb_value:.2f} گیگابایت"
-        hours = float(days) * 24
-        if hours < 24:
-            hv = int(round(hours)) if abs(hours - round(hours)) < 1e-9 else round(hours, 1)
-            days_text = f"{hv} ساعت"
-        else:
-            dv = int(float(days)) if float(days).is_integer() else round(float(days), 2)
-            days_text = f"{dv} روز"
-        return volume_text, days_text
-    volume_text = f"{volume_gb} گیگابایت" if volume_gb else "طبق بسته‌ی انتخابی"
-    days_text = f"{days} روز" if days else "نامحدود"
+        v = 0.0
+    if v and v < 1:
+        volume_text = f"{round(v * 1024)} مگابایت"
+    else:
+        volume_text = f"{int(v) if v.is_integer() else round(v, 2)} گیگ"
+    try:
+        d = int(days) if days is not None else 0
+    except Exception:
+        d = 0
+    if d < 1:
+        days_text = "کمتر از ۱ روز"
+    elif d == 1:
+        days_text = "۱ روزه"
+    else:
+        days_text = f"{d} روزه"
     return volume_text, days_text
+
+router = Router(name="panel_admin")
 router.message.middleware(AdminPermissionMiddleware())
 router.callback_query.middleware(AdminPermissionMiddleware())
 logger = logging.getLogger(__name__)
@@ -379,7 +374,7 @@ async def open_vpn_panel_type_list(callback: types.CallbackQuery):
         await callback.answer("❌ نوع پنل نامعتبر.", show_alert=True)
         return
     instances = db.list_vpn_panels(panel_type=panel_type)
-    label = panels.PANEL_TYPE_LABELS[panel_type]
+    label = panels.PANEL_TYPE_LABELS.get(panel_type, panel_type)
     text = f"🖥 نمونه‌های پنل {label}"
     if not instances:
         text += "\n\nهنوز هیچ نمونه‌ای از این نوع اضافه نشده. می‌تونی چند نمونه هم‌زمان از این نوع اضافه کنی."
@@ -477,7 +472,7 @@ async def vpn_panel_delete(callback: types.CallbackQuery):
     db.delete_vpn_panel(panel_id)
     instances = db.list_vpn_panels(panel_type=panel_type)
     await callback.message.edit_text(
-        f"🗑 حذف شد. نمونه‌های فعلی پنل {panels.PANEL_TYPE_LABELS[panel_type]}:",
+        f"🗑 حذف شد. نمونه‌های فعلی پنل {panels.PANEL_TYPE_LABELS.get(panel_type, panel_type)}:",
         reply_markup=admin_vpn_panel_list_keyboard(panel_type, instances),
     )
     await callback.answer()
@@ -497,7 +492,7 @@ async def vpn_panel_add_start(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(new_panel_type=panel_type)
     await state.set_state(AdminStates.waiting_panel_name)
     await callback.message.edit_text(
-        f"➕ افزودن پنل {panels.PANEL_TYPE_LABELS[panel_type]} جدید\n\n"
+        f"➕ افزودن پنل {panels.PANEL_TYPE_LABELS.get(panel_type, panel_type)} جدید\n\n"
         "یک نام دلخواه برای این نمونه بفرست (فقط برای تشخیص خودت در لیست، مثلاً «سرور 1 المان»):",
         reply_markup=admin_vpn_panel_types_cancel_keyboard(),
     )
