@@ -146,78 +146,56 @@ def _admin_perm(user_id: int, permission: str) -> bool:
 
 # ---------------------------------------------------------------------------
 # منوی کاربر عادی
+# هر دکمهٔ Reply Keyboard یک عمل مستقیم دارد؛ دکمه‌ها تجمیعی نیستند.
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# منوی کاربر عادی — دکمه‌های تجمیعی Reply Keyboard
-# ---------------------------------------------------------------------------
-@router.message(F.text.in_({"تست", "خرید اشتراک"}))
-async def menu_buy_or_test(message: types.Message, state: FSMContext):
-    await state.clear()
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    await show_menu_with_sticker(
-        message.bot, message.chat.id, "buy_plans",
-        "🛒 خرید اشتراک یا 🎁 تست رایگان را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🛒 خرید اشتراک", callback_data="plans", style="success")],
-            [InlineKeyboardButton(text="🎁 تست رایگان", callback_data="buy_plan_test", style="success")],
-        ]),
-    )
+@router.message(_MenuButtonText("main_free_test", "🎁 تست رایگان"))
+async def menu_free_test_from_reply(message: types.Message, state: FSMContext):
+    await menu_free_test(message, state)
 
 
-@router.message(F.text.in_({"کیف پول", "تمدید"}))
-async def menu_wallet_or_renew(message: types.Message, state: FSMContext):
-    await state.clear()
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    await show_menu_with_sticker(
-        message.bot, message.chat.id, "wallet",
-        "💰 کیف پول یا 🔁 تمدید سرویس را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💰 کیف پول", callback_data="wallet", style="success")],
-            [InlineKeyboardButton(text="🔁 تمدید سرویس", callback_data="renew", style="success")],
-        ]),
-    )
+@router.message(_MenuButtonText("main_buy", "🛒 خرید اشتراک"))
+async def menu_plans_from_reply(message: types.Message, state: FSMContext):
+    await menu_plans(message, state)
 
 
-@router.message(F.text.in_({"پروفایل", "سرویس‌های من"}))
-async def menu_profile_or_configs(message: types.Message, state: FSMContext):
-    await state.clear()
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    await show_menu_with_sticker(
-        message.bot, message.chat.id, "profile",
-        "👤 پروفایل یا 📱 سرویس‌های من را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="👤 پروفایل", callback_data="profile", style="primary")],
-            [InlineKeyboardButton(text="📱 سرویس‌های من", callback_data="my_configs", style="primary")],
-        ]),
-    )
+@router.message(_MenuButtonText("main_wallet", "💰 کیف پول"))
+async def menu_wallet_from_reply(message: types.Message, state: FSMContext):
+    await menu_wallet(message, state)
 
 
-@router.message(F.text.in_({"راهنما", "پشتیبانی"}))
-async def menu_guides_or_support(message: types.Message, state: FSMContext):
-    await state.clear()
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    await show_menu_with_sticker(
-        message.bot, message.chat.id, "support",
-        "📚 راهنما یا 👨‍💻 پشتیبانی را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📚 راهنما", callback_data="user_guides", style="primary")],
-            [InlineKeyboardButton(text="👨‍💻 پشتیبانی", callback_data="support", style="primary")],
-        ]),
-    )
+@router.message(_MenuButtonText("main_renew", "🔁 تمدید سرویس"))
+async def menu_renew_from_reply(message: types.Message, state: FSMContext):
+    await menu_renew(message, state)
 
 
-@router.message(F.text.in_({"نمایندگی", "دعوت دوستان"}))
-async def menu_agency_or_referral(message: types.Message, state: FSMContext):
-    await state.clear()
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    await show_menu_with_sticker(
-        message.bot, message.chat.id, "referral",
-        "🤝 نمایندگی یا 👥 دعوت دوستان را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🤝 درخواست نمایندگی", callback_data="agency_request", style="danger")],
-            [InlineKeyboardButton(text="👥 دعوت دوستان", callback_data="referral", style="danger")],
-        ]),
-    )
+@router.message(_MenuButtonText("main_profile", "👤 پروفایل من"))
+async def menu_profile_from_reply(message: types.Message, state: FSMContext):
+    await menu_profile(message, state)
+
+
+@router.message(_MenuButtonText("main_configs", "📱 سرویس‌های من"))
+async def menu_configs_from_reply(message: types.Message, state: FSMContext):
+    await menu_configs(message, state)
+
+
+@router.message(_MenuButtonText("main_guides", "📚 راهنما"))
+async def menu_guides_from_reply(message: types.Message, state: FSMContext):
+    await menu_guides(message, state)
+
+
+@router.message(_MenuButtonText("main_support", "👨‍💻 پشتیبانی"))
+async def menu_support_from_reply(message: types.Message, state: FSMContext):
+    await menu_support(message, state)
+
+
+@router.message(_MenuButtonText("main_referral", "👥 دعوت دوستان"))
+async def menu_referral_from_reply(message: types.Message, state: FSMContext):
+    await menu_referral(message, state)
+
+
+@router.message(_MenuButtonText("main_agency", "🤝 نمایندگی"))
+async def menu_agency_from_reply(message: types.Message, state: FSMContext):
+    await menu_agency_request_start(message, state)
 
 
 @router.callback_query(F.data == "buy_plan_test")
