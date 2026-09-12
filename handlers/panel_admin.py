@@ -1,6 +1,6 @@
 """
 handlers/panel_admin.py
-مدیریت یکپارچه‌شده‌ی هر سه نوع پنل (شاهراه / مرزبان / پاسارگارد).
+مدیریت یکپارچه‌شده‌ی پنل‌های مرزبان / پاسارگارد / 3X-UI.
 
 ⚠️ جایگزین handlers/shahrah_admin.py قدیمی (یکپنلی، فقط شاهراه). این ماژول:
 - هر سه نوع پنل را هم‌زمان پشتیبانی می‌کند (هر سه در یک لحظه می‌توانند فعال باشند).
@@ -28,7 +28,7 @@ import re
 import secrets
 import string
 from datetime import datetime, timedelta
-from subscription import days_remaining
+from subscription import format_service_package, days_remaining
 from io import BytesIO
 
 from aiogram import Router, F, types
@@ -68,42 +68,9 @@ _LATIN_NAME_RE = re.compile(r"^[A-Za-z0-9]{1,32}$")
 from handlers.admin import _is_admin, _log_fulfilled_order, AdminPermissionMiddleware
 
 router = Router(name="panel_admin")
-
-
-def format_service_package(volume_gb, days, plan_key=None):
-    """قالب نمایش حجم/مدت؛ برای تست رایگان مقادیر کوچک را به MB/ساعت نشان می‌دهد.
-    این helper عمداً اینجا نگه داشته شده تا panel_admin به API داخلی subscription وابسته نشود.
-    """
-    try:
-        from config import FREE_TEST_PLAN_KEY
-    except Exception:
-        FREE_TEST_PLAN_KEY = None
-    if plan_key == FREE_TEST_PLAN_KEY and volume_gb is not None and days is not None:
-        volume_mb = round(float(volume_gb) * 1024)
-        if volume_mb < 1024:
-            volume_text = f"{volume_mb} مگابایت"
-        else:
-            gb_value = volume_mb / 1024
-            volume_text = f"{gb_value:.0f} گیگابایت" if gb_value == int(gb_value) else f"{gb_value:.2f} گیگابایت"
-        hours = float(days) * 24
-        if hours < 24:
-            hv = int(round(hours)) if abs(hours - round(hours)) < 1e-9 else round(hours, 1)
-            days_text = f"{hv} ساعت"
-        else:
-            dv = int(float(days)) if float(days).is_integer() else round(float(days), 2)
-            days_text = f"{dv} روز"
-        return volume_text, days_text
-    volume_text = f"{volume_gb} گیگابایت" if volume_gb else "طبق بسته‌ی انتخابی"
-    days_text = f"{days} روز" if days else "نامحدود"
-    return volume_text, days_text
 router.message.middleware(AdminPermissionMiddleware())
 router.callback_query.middleware(AdminPermissionMiddleware())
 logger = logging.getLogger(__name__)
-
-# برچسب‌های ثابت منوی مدیریت پنل؛ عمداً مستقل از هر متغیر محلی به نام panels.
-_PANEL_TYPE_LABELS = {"marzban": "مرزبان", "pasargad": "پاسارگارد", "threexui": "3X-UI"}
-def _panel_type_label(panel_type: str) -> str:
-    return _PANEL_TYPE_LABELS.get(str(panel_type), str(panel_type))
 
 try:
     import qrcode
@@ -149,8 +116,7 @@ def _admin_fsm(bot) -> FSMContext | None:
 # ---------------------------------------------------------------------------
 async def auto_fulfill_vip_via_panel(bot, uid, plan_key: str, order_id: int | None) -> bool:
     mapping = db.get_panel_map_for_plan_key(plan_key)
-    # panel_plan_map خودش ستون enabled ندارد؛ فعال بودن مقصد از vpn_panels خوانده می‌شود.
-    if not mapping or mapping.get("panel_id") is None or mapping.get("remote_ref") is None:
+    if not mapping or not mapping.get("enabled"):
         return False
 
     plan = db.get_effective_plan(plan_key)
@@ -357,7 +323,7 @@ async def open_vpn_panel_types(callback: types.CallbackQuery):
         return
     await callback.message.edit_text(
         "🖥 مدیریت پنل‌های VPN\n\n"
-        "هر سه نوع پنل (شاهراه/مرزبان/پاسارگارد) می‌توانند هم‌زمان فعال باشند و هرکدام می‌تواند چند نمونه داشته باشد.\n"
+        "مرزبان / پاسارگارد / 3X-UI می‌توانند هم‌زمان فعال باشند و هرکدام می‌تواند چند نمونه داشته باشد.\n"
         "یک نوع رو انتخاب کن:",
         reply_markup=admin_vpn_panel_types_keyboard(),
     )
@@ -370,7 +336,7 @@ async def menu_admin_vpn_panels(message: types.Message):
         return
     await message.answer(
         "🖥 مدیریت پنل‌های VPN\n\n"
-        "هر سه نوع پنل (شاهراه/مرزبان/پاسارگارد) می‌توانند هم‌زمان فعال باشند و هرکدام می‌تواند چند نمونه داشته باشد.\n"
+        "مرزبان / پاسارگارد / 3X-UI می‌توانند هم‌زمان فعال باشند و هرکدام می‌تواند چند نمونه داشته باشد.\n"
         "یک نوع رو انتخاب کن:",
         reply_markup=admin_vpn_panel_types_keyboard(),
     )
@@ -385,7 +351,7 @@ async def open_vpn_panel_type_list(callback: types.CallbackQuery):
         await callback.answer("❌ نوع پنل نامعتبر.", show_alert=True)
         return
     instances = db.list_vpn_panels(panel_type=panel_type)
-    label = _panel_type_label(panel_type)
+    label = panels.PANEL_TYPE_LABELS[panel_type]
     text = f"🖥 نمونه‌های پنل {label}"
     if not instances:
         text += "\n\nهنوز هیچ نمونه‌ای از این نوع اضافه نشده. می‌تونی چند نمونه هم‌زمان از این نوع اضافه کنی."
@@ -483,7 +449,7 @@ async def vpn_panel_delete(callback: types.CallbackQuery):
     db.delete_vpn_panel(panel_id)
     instances = db.list_vpn_panels(panel_type=panel_type)
     await callback.message.edit_text(
-        f"🗑 حذف شد. نمونه‌های فعلی پنل {_panel_type_label(panel_type)}:",
+        f"🗑 حذف شد. نمونه‌های فعلی پنل {panels.PANEL_TYPE_LABELS[panel_type]}:",
         reply_markup=admin_vpn_panel_list_keyboard(panel_type, instances),
     )
     await callback.answer()
@@ -503,7 +469,7 @@ async def vpn_panel_add_start(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(new_panel_type=panel_type)
     await state.set_state(AdminStates.waiting_panel_name)
     await callback.message.edit_text(
-        f"➕ افزودن پنل {_panel_type_label(panel_type)} جدید\n\n"
+        f"➕ افزودن پنل {panels.PANEL_TYPE_LABELS[panel_type]} جدید\n\n"
         "یک نام دلخواه برای این نمونه بفرست (فقط برای تشخیص خودت در لیست، مثلاً «سرور 1 المان»):",
         reply_markup=admin_vpn_panel_types_cancel_keyboard(),
     )
@@ -534,7 +500,11 @@ async def vpn_panel_add_base_url(message: types.Message, state: FSMContext):
     data = await state.get_data()
     panel_type = data.get("new_panel_type")
     await state.update_data(new_panel_base_url=base_url.rstrip("/"))
-    if len(panels.PANEL_AUTH_METHODS.get(panel_type, ())) > 1:
+    if panel_type == "shahrah":
+        await state.update_data(new_panel_auth_method="api_key")
+        await state.set_state(AdminStates.waiting_panel_api_key)
+        await message.answer("🔑 API Key این نمونه رو بفرست:")
+    elif len(panels.PANEL_AUTH_METHODS.get(panel_type, ())) > 1:
         # 🆕 این نوع پنل هم از یوزرنیم/پسورد و هم از API Key پشتیبانی می‌کند؛
         # ادمین انتخاب می‌کند کدام‌یک برای این نمونه استفاده شود.
         await message.answer(
@@ -1057,8 +1027,8 @@ async def panel_send_service(callback: types.CallbackQuery, state: FSMContext):
         return
 
     mapping = db.get_panel_map_for_plan_key(plan_key)
-    if not mapping or mapping.get("panel_id") is None or mapping.get("remote_ref") is None:
-        await callback.answer("❌ برای این پلن هنوز پنل/بسته‌ای نگاشت نشده.", show_alert=True)
+    if not mapping or not mapping.get("enabled"):
+        await callback.answer("❌ برای دسته‌بندی این پلن هنوز هیچ پنل فعالی نگاشت نشده.", show_alert=True)
         return
     panel = db.get_vpn_panel(mapping["panel_id"])
     if not panel:
@@ -1278,6 +1248,10 @@ async def _fulfill_custom_renew(bot, order: dict, order_id: int, volume, days) -
         except Exception: logger.exception("failed to release renew claim %s", order_id)
         return False, "❌ پنل مربوطه به این سرویس یافت نشد یا غیرفعال است."
 
+    if panel.get("panel_type") == "shahrah":
+        try: db.set_custom_order_status(order_id, "paid")
+        except Exception: logger.exception("failed to release renew claim %s", order_id)
+        return False, "❌ شاهراه برای تمدید سفارشیِ حجم/زمان API مستقیمی مثل مرزبان/پاسارگارد ندارد؛ برای این عملیات باید بسته‌ی مشخص شاهراه انتخاب شود."
     ok, new_link, new_service_id, raw_data, msg = await panels.renew_service(panel, cfg["service_id"], remote_ref=None, volume_gb=volume or 0, days=days or 0)
     if not ok:
         try: db.set_custom_order_status(order_id, "paid")
@@ -1470,6 +1444,8 @@ async def panel_revoke_sub(callback: types.CallbackQuery):
         await callback.answer("❌ سرویس پنلی پیدا نشد.",show_alert=True); return
     panel=db.get_vpn_panel(cfg["panel_id"])
     if not panel: await callback.answer("❌ پنل پیدا نشد.",show_alert=True); return
+    if panel.get("panel_type")=="shahrah":
+        await callback.answer("ℹ️ شاهراه تغییر لینک مستقل بدون تعویض بسته را از این مسیر ارائه نمی‌کند.",show_alert=True); return
     await callback.answer("⏳ در حال باطل‌کردن لینک قبلی و ساخت لینک جدید از خود پنل...")
     ok, link, new_id, data, msg = await panels.regenerate_sub_link(panel, cfg["service_id"])
     if not ok or not link:
