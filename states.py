@@ -94,14 +94,15 @@ class AdminStates(StatesGroup):
     waiting_panel_api_key = State()
     waiting_panel_username = State()
     waiting_panel_password = State()
-    waiting_panel_edit_field = State()
 
-    # حالت‌های قدیمی/تکمیلی مسیر ارسال و ساخت سرویس از پنل؛
-    # در handlers/panel_admin.py استفاده می‌شوند و باید صریحاً در FSM تعریف باشند.
+    # ارسال/تحویل خودکار پنل وقتی لینک ساب از پاسخ API قابل استخراج نیست
     waiting_panel_manual_link = State()
+
+    # ایجاد سرویس مستقیم توسط ادمین
     waiting_admin_service_volume = State()
     waiting_admin_service_days = State()
     waiting_admin_service_name = State()
+    waiting_panel_edit_field = State()
     waiting_vpn_panel_name = State()
     waiting_vpn_panel_url = State()
     waiting_vpn_panel_username = State()
