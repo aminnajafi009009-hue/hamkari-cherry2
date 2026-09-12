@@ -196,13 +196,16 @@ def join_channels_keyboard(channels):
 def main_reply_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🟢 تست / خرید اشتراک", style="success")],
-            [KeyboardButton(text="🟢 کیف پول / تمدید", style="success")],
-            [KeyboardButton(text="🔵 پروفایل / سرویس‌های من", style="primary")],
-            [KeyboardButton(text="🔵 راهنما / پشتیبانی", style="primary")],
-            [KeyboardButton(text="🔴 نمایندگی / دعوت دوستان", style="danger")],
+            [KeyboardButton(text=db.get_text_override("main_free_test", "تست رایگان"), style="success"), KeyboardButton(text=db.get_text_override("main_buy", "خرید اشتراک"), style="success")],
+            [KeyboardButton(text=db.get_text_override("main_wallet", "کیف پول"), style="success"), KeyboardButton(text=db.get_text_override("main_renew", "تمدید سرویس"), style="success")],
+            [KeyboardButton(text=db.get_text_override("main_profile", "پروفایل من"), style="primary"), KeyboardButton(text=db.get_text_override("main_configs", "سرویس‌های من"), style="primary")],
+            [KeyboardButton(text=db.get_text_override("main_guides", "راهنما"), style="primary"), KeyboardButton(text=db.get_text_override("main_support", "پشتیبانی"), style="primary")],
+            [KeyboardButton(text=t("main_agency"), style="danger"), KeyboardButton(text=db.get_text_override("main_referral", "دعوت دوستان"), style="danger")],
         ],
         resize_keyboard=True,
+        # منوی ربات توسط کلاینت تلگرام قابل باز/بسته شدن باشد.
+        # وقتی is_persistent=False باشد، تلگرام آیکون چهارخونه/کیبورد
+        # را برای باز و بسته کردن Reply Keyboard در اختیار کاربر می‌گذارد.
         is_persistent=False,
         one_time_keyboard=False,
     )
@@ -507,12 +510,11 @@ def fair_use_keyboard(cfg_id):
     ])
 
 def crypto_payment_keyboard(asset: str, wallet: str, amount: str):
-    # آدرس داخل متن فاکتور نمایش داده نمی‌شود؛ فقط یک دکمه‌ی واضح و رنگی
-    # برای کپی‌کردن آدرس ولت در اختیار کاربر است.
+    # خود آدرس کیف پول مثل شماره کارت قابل لمس/کپی است؛ هیچ دکمه‌ی دیگری
+    # برای «ارسال رسید» یا «بررسی پرداخت» زیر فاکتور قرار نمی‌گیرد.
     wallet_text = str(wallet or "").strip()
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t("crypto_copy_wallet", default="📋 کپی ولت"),
-                              copy_text=CopyTextButton(text=wallet_text), style="success")],
+        [InlineKeyboardButton(text=wallet_text, copy_text=CopyTextButton(text=wallet_text))],
     ])
 
 def config_detail_keyboard(cfg_id, sub_link_url: str | None = None, has_qr: bool = False, back_callback: str = "my_configs_vip", service_id: str | None = None, disabled: bool = False):
@@ -719,23 +721,16 @@ def admin_purchase_notify_keyboard(uid: str, plan_key: str | None = None, order_
     suffix = f"|{order_id}" if order_id else ""
     oid = order_id or 0
 
-    # نگاشت جدید چندپنلی: اگر برای همین پلن یک پنل + مرجع بسته نگاشت شده باشد،
-    # دکمه‌ی ارسال خودکار نمایش داده می‌شود. panel_plan_map ستون enabled ندارد؛
-    # فعال/غیرفعال بودن از خود ردیف vpn_panels خوانده می‌شود.
+    # اگر پنل مرزبان فعال است و برای دسته‌بندی این پلن یک planSlug نگاشت شده
+    # باشد، دکمه‌ی «ارسال خودکار از پنل» هم علاوه‌بر روش دستی (که هیچ تغییری
+    # نکرده) نمایش داده می‌شود؛ انتخاب نهایی همیشه با ادمین است.
     auto_row = []
-    if plan_key:
-        try:
-            mapping = db.get_panel_map_for_plan_key(plan_key)
-            if mapping and mapping.get("panel_id") is not None and mapping.get("remote_ref") is not None:
-                panel = db.get_vpn_panel(mapping["panel_id"])
-                if panel and panel.get("enabled"):
-                    auto_row = [[InlineKeyboardButton(
-                        text="🚀 ارسال خودکار از پنل",
-                        callback_data=f"panelsend|{uid}|{plan_key}|{oid}",
-                        style="success",
-                    )]]
-        except Exception:
-            auto_row = []
+    if vpn_panel.active_panel() and plan_key:
+        mapping = db.get_marzban_plan_map_for_plan_key(plan_key)
+        if mapping:
+            auto_row = [[InlineKeyboardButton(
+                text="📤 ارسال خودکار از پنل فعال", callback_data=f"marzbansend|{uid}|{plan_key}|{oid}"
+            , style="primary")]]
 
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚀 ارسال کانفیگ VIP (QR) — دستی", callback_data=f"sendvip_{uid}{suffix}", style="primary")],
@@ -1607,7 +1602,7 @@ def admin_permissions_keyboard(admin_id: str, selected=None):
 # فعال هستند و هر کدام می‌تواند چند نمونه (Instance) هم‌زمان داشته باشد.
 # ---------------------------------------------------------------------------
 def admin_vpn_panel_types_keyboard():
-    """انتخاب نوع پنل مدیریت؛ فقط مرزبان، پاسارگارد و 3X-UI."""
+    """انتخاب نوع پنل مدیریت؛ فقط پنل‌های پشتیبانی‌شده و بدون شاهراه."""
     panel_types = (("marzban", "مرزبان"), ("pasargad", "پاسارگارد"), ("threexui", "3X-UI"))
     buttons = [
         [InlineKeyboardButton(text=label, callback_data=f"vpntype|{ptype}", style="primary")]
@@ -1627,7 +1622,7 @@ def admin_vpn_panel_list_keyboard(panel_type: str, panels: list[dict]):
             text=f"{mark} {p['name']}", callback_data=f"vpndetail|{p['id']}", style="primary"
         )])
     buttons.append([InlineKeyboardButton(
-        text=f"➕ افزودن پنل {panels.PANEL_TYPE_LABELS.get(panel_type, panel_type)} جدید",
+        text=f"➕ افزودن پنل {PANEL_TYPE_LABELS.get(panel_type, panel_type)} جدید",
         callback_data=f"vpnadd|{panel_type}", style="success",
     )])
     buttons.append([InlineKeyboardButton(text="🔙 بازگشت به انتخاب نوع پنل", callback_data="admin_vpn_panels", style="primary")])
@@ -1668,8 +1663,8 @@ def admin_vpn_panel_edit_menu_keyboard(panel: dict):
         [InlineKeyboardButton(text="✏️ نام", callback_data=f"vpneditfield|{pid}|name", style="primary")],
         [InlineKeyboardButton(text="✏️ آدرس پایه (base URL)", callback_data=f"vpneditfield|{pid}|base_url", style="primary")],
     ]
-    if panel["panel_type"] not in panels.PANEL_AUTH_METHODS:
-        buttons.append([InlineKeyboardButton(text="⚠️ نوع پنل پشتیبانی نمی‌شود", callback_data=f"vpndetail|{pid}", style="danger")])
+    if panel["panel_type"] == "shahrah":
+        buttons.append([InlineKeyboardButton(text="✏️ API Key", callback_data=f"vpneditfield|{pid}|api_key", style="primary")])
     else:
         auth_method = panel.get("auth_method") or "userpass"
         if auth_method == "api_key":
