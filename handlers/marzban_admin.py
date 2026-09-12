@@ -185,7 +185,7 @@ def _admin_fsm(bot) -> FSMContext | None:
 # ---------------------------------------------------------------------------
 async def auto_fulfill_vip_via_marzban(bot, uid, plan_key: str, order_id: int | None) -> bool:
     mapping = db.get_panel_map_for_plan_key(plan_key)
-    if not mapping or not mapping.get("panel_id") or not mapping.get("remote_ref"):
+    if not mapping or not mapping.get("panel_id"):
         return False
 
     plan = db.get_effective_plan(plan_key)
@@ -196,7 +196,7 @@ async def auto_fulfill_vip_via_marzban(bot, uid, plan_key: str, order_id: int | 
     panel_id = int(mapping["panel_id"])
     # در نگاشت پاسارگارد، remote_ref همان ID تمپلیت پنل است. برای
     # سازگاری با رکوردهای قدیمی، plan_slug هم به‌عنوان fallback پذیرفته می‌شود.
-    template_id = mapping.get("remote_ref")
+    template_id = mapping.get("remote_ref") or mapping.get("plan_slug")
     if template_id is None:
         return False
     panel_label = vpn_panel.panel_label(panel_id)
@@ -328,8 +328,8 @@ async def _fetch_plan_choices() -> tuple[list[dict], str]:
         template_id = it.get("id")
         if template_id is None:
             continue
-        name = it.get("name") or f"template-{template_id}"
-        label = f"📦 {name} (ID: {template_id})"
+        name = it.get("name") or f"template-{mapping.get('remote_ref')}"
+        label = f"📦 {name} (ID: {mapping.get('remote_ref')})"
         if len(label) > 60:
             label = label[:57] + "..."
         choices.append({"idx": i, "slug": str(template_id), "name": name, "label": label})
@@ -632,17 +632,16 @@ async def marzban_send_service(callback: types.CallbackQuery, state: FSMContext)
         await callback.answer("❌ کاربر یا پلن یافت نشد.", show_alert=True)
         return
 
-    # نگاشت جدید پنل مشخص می‌کند سرویس دقیقاً در کدام پنل و با کدام Template ساخته شود.
     mapping = db.get_panel_map_for_plan_key(plan_key)
-    if not mapping or not mapping.get("panel_id") or not mapping.get("remote_ref"):
-        await callback.answer("❌ برای این پلن/تست هنوز Template پنل نگاشت نشده.", show_alert=True)
+    if not mapping or not mapping.get("panel_id") or mapping.get("remote_ref") is None:
+        await callback.answer("❌ برای این پلن هنوز Template پنل نگاشت نشده.", show_alert=True)
         return
 
-    await callback.answer("⏳ در حال ساخت سرویس در پنل...")
+    await callback.answer("⏳ در حال ساخت سرویس در پنل نگاشت‌شده...")
     panel_id = int(mapping["panel_id"])
     panel = vpn_panel.get_panel(panel_id)
     if not panel:
-        await callback.answer("❌ پنل نگاشت‌شده فعال/موجود نیست.", show_alert=True); return
+        await callback.answer("❌ پنل نگاشت‌شده دیگر فعال/موجود نیست.", show_alert=True); return
     username = _generate_service_username()
     # 🆕 فیکس: حجم/مدت دقیقاً از روی خود پلن (plan['volume_gb']/plan['days']) گرفته می‌شود، نه از روی تمپلیت نگاشت‌شده.
     # 🆕 فیکس HWID Limit: سقف کاربر همزمان خود پلن (plan['user_limit']) همراه با ساخت سرویس به پنل فرستاده می‌شود.
@@ -653,8 +652,8 @@ async def marzban_send_service(callback: types.CallbackQuery, state: FSMContext)
     if not ok:
         await answer_rich(callback.message, 
             f"❌ ساخت سرویس در پنل مرزبان ناموفق بود: {msg}\n\n"
-            f"🔑 planSlug ارسال‌شده: <code>{html.escape(str(mapping.get('remote_ref') or ''))}</code> "
-            f"(نگاشت‌شده به‌عنوان «{html.escape(mapping.get('plan_name') or '')}»)\n"
+            f"🔑 planSlug ارسال‌شده: <code>{html.escape(str(mapping.get('remote_ref')))}</code> "
+            f"(نگاشت‌شده به‌عنوان «{html.escape(mapping.get('remote_name') or '')}»)\n"
             "اگه این پیام SERVICE_NOT_FOUND/NOT_FOUND می‌ده، احتمالاً این بسته توی پنل مرزبان حذف/rename شده؛ "
             "از «📦 مشاهده بسته‌های مرزبان» یک بار slug فعلی رو چک کن و در صورت نیاز دوباره نگاشت کن.",
             parse_mode="HTML",
@@ -916,6 +915,7 @@ async def marzban_renew_volume_received(message: types.Message, state: FSMContex
         await answer_rich(message, "❌ یک عدد معتبر برای حجم (گیگابایت) وارد کن:")
         return
     await state.update_data(marzban_renew_volume_gb=volume_gb)
+    data = await state.get_data()
     await state.set_state(AdminStates.waiting_marzban_renew_days)
     await answer_rich(message, "تعداد روز اضافه را وارد کن (عدد 0 یعنی زمان نامحدود):", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"marzbanrenewback_{data.get('marzban_renew_cfg_id')}")]]))
 
@@ -937,7 +937,7 @@ async def marzban_renew_days_received(message: types.Message, state: FSMContext)
         return
 
     await answer_rich(message, "⏳ در حال تمدید افزایشی...")
-    ok, data, msg = await vpn_panel.renew_user_additive(cfg["service_id"], volume_gb, days, source=cfg.get("source"))
+    ok, data, msg = await vpn_panel.renew_user_additive(cfg["service_id"], volume_gb, days, source=cfg.get("source"), panel_id=cfg.get("panel_id"))
     if not ok:
         await answer_rich(message, 
             f"❌ تمدید ناموفق بود: {msg}\n"
@@ -950,16 +950,20 @@ async def marzban_renew_days_received(message: types.Message, state: FSMContext)
     await answer_rich(message, f"📨 پاسخ پنل مرزبان:\n<pre>{_pretty(data)}</pre>", parse_mode="HTML")
     link, slug = vpn_panel.extract_link_and_username(data)
     new_slug = slug or cfg["service_id"]
-    expiry_date = (now_tehran_naive() + timedelta(days=days)).strftime("%Y-%m-%d") if days else None
+    try:
+        exp = data.get("expire") if isinstance(data, dict) else None
+        expiry_date = datetime.fromtimestamp(int(exp), tz=TEHRAN_TZ).replace(tzinfo=None).strftime("%Y-%m-%d") if exp else cfg.get("expiry")
+    except Exception:
+        expiry_date = cfg.get("expiry")
     if link:
         encrypted = crypto.encrypt_config(link)
-        db.update_config(cfg_id, cfg["plan"], encrypted, expiry=expiry_date, service_id=new_slug)
+        db.update_config(cfg_id, cfg["plan"], encrypted, expiry=expiry_date, service_id=new_slug, panel_id=cfg.get("panel_id"))
         await answer_rich(message, 
             "✅ سرویس در پنل مرزبان تمدید شد و لینک جدید ذخیره شد.\n"
             "(اگر لینک ساب عوض شده، حتماً به کاربر هم اطلاع بده.)"
         )
     else:
-        db.update_config(cfg_id, cfg["plan"], cfg["config"], expiry=expiry_date, service_id=new_slug)
+        db.update_config(cfg_id, cfg["plan"], cfg["config"], expiry=expiry_date, service_id=new_slug, panel_id=cfg.get("panel_id"))
         await answer_rich(message, 
             "✅ سرویس در پنل مرزبان با حجم/مدت جدید تمدید شد. لینک ساب تغییری نکرده، برای همین نیازی به اطلاع دوباره به کاربر نیست."
         )
