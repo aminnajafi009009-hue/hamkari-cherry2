@@ -147,6 +147,24 @@ def _admin_perm(user_id: int, permission: str) -> bool:
 # ---------------------------------------------------------------------------
 # منوی کاربر عادی
 # ---------------------------------------------------------------------------
+@router.callback_query(F.data == "buy_plan_test")
+async def menu_free_test_callback(callback: types.CallbackQuery, state: FSMContext):
+    await menu_free_test(callback.message, state)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "renew")
+async def menu_renew_callback(callback: types.CallbackQuery, state: FSMContext):
+    await menu_renew(callback.message, state)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "agency_request")
+async def menu_agency_callback(callback: types.CallbackQuery, state: FSMContext):
+    await menu_agency_request_start(callback.message, state)
+    await callback.answer()
+
+
 @router.message(_MenuButtonText("main_buy", "🛒 خرید اشتراک"))
 async def menu_plans(message: types.Message, state: FSMContext):
     await state.clear()
