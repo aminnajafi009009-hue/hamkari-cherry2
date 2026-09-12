@@ -213,7 +213,7 @@ async def auto_fulfill_vip_via_marzban(bot, uid, plan_key: str, order_id: int | 
             ADMIN_ID,
             f"⚠️ خرید VIP (کیف‌پول/پرداخت آنلاین) قرار بود خودکار از پنل {panel_label} ارسال شود ولی "
             f"ساخت سرویس در پنل ناموفق بود:\n{msg}\n"
-            f"🔑 Template ID ارسال‌شده: {mapping.get('remote_ref')}\n\n"
+            f"🔑 Template ID ارسال‌شده: {template_id}\n\n"
             "لطفاً از دکمه‌ی ارسال دستی زیر همین سفارش استفاده کن. "
             "اگه خطا NOT_FOUND بود، احتمالاً باید این نگاشت رو دوباره از منوی پنل فعال تنظیم کنی (توجه: نگاشت بسته به پنل فعلی بستگی دارد — اگر پنل فعال را عوض کردید، باید دوباره از روی همان پنل نگاشت کنید).",
         )
@@ -273,7 +273,7 @@ async def auto_fulfill_custom_via_marzban(bot, user: dict, order_id: int, volume
             ADMIN_ID,
             f"⚠️ سفارش «بساز سرویس خودت» (کیف‌پول/پرداخت آنلاین) قرار بود خودکار از پنل {panel_label} ارسال "
             f"شود ولی ساخت سرویس ناموفق بود:\n{msg}\n"
-            f"🔑 Template ID ارسال‌شده: {mapping.get('remote_ref')}\n\n"
+            f"🔑 Template ID ارسال‌شده: {template_id}\n\n"
             "لطفاً از دکمه‌ی ارسال دستی این سفارش استفاده کن. "
             "اگه خطا NOT_FOUND بود، از «🧩 نگاشت پیش‌فرض بساز سرویس خودت» دوباره یه بسته‌ی معتبر از روی همان پنل فعلی انتخاب کن.",
         )
@@ -328,8 +328,8 @@ async def _fetch_plan_choices() -> tuple[list[dict], str]:
         template_id = it.get("id")
         if template_id is None:
             continue
-        name = it.get("name") or f"template-{mapping.get('remote_ref')}"
-        label = f"📦 {name} (ID: {mapping.get('remote_ref')})"
+        name = it.get("name") or f"template-{template_id}"
+        label = f"📦 {name} (ID: {template_id})"
         if len(label) > 60:
             label = label[:57] + "..."
         choices.append({"idx": i, "slug": str(template_id), "name": name, "label": label})
@@ -915,7 +915,6 @@ async def marzban_renew_volume_received(message: types.Message, state: FSMContex
         await answer_rich(message, "❌ یک عدد معتبر برای حجم (گیگابایت) وارد کن:")
         return
     await state.update_data(marzban_renew_volume_gb=volume_gb)
-    data = await state.get_data()
     await state.set_state(AdminStates.waiting_marzban_renew_days)
     await answer_rich(message, "تعداد روز اضافه را وارد کن (عدد 0 یعنی زمان نامحدود):", reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[types.InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"marzbanrenewback_{data.get('marzban_renew_cfg_id')}")]]))
 
@@ -950,11 +949,7 @@ async def marzban_renew_days_received(message: types.Message, state: FSMContext)
     await answer_rich(message, f"📨 پاسخ پنل مرزبان:\n<pre>{_pretty(data)}</pre>", parse_mode="HTML")
     link, slug = vpn_panel.extract_link_and_username(data)
     new_slug = slug or cfg["service_id"]
-    try:
-        exp = data.get("expire") if isinstance(data, dict) else None
-        expiry_date = datetime.fromtimestamp(int(exp), tz=TEHRAN_TZ).replace(tzinfo=None).strftime("%Y-%m-%d") if exp else cfg.get("expiry")
-    except Exception:
-        expiry_date = cfg.get("expiry")
+    expiry_date = (now_tehran_naive() + timedelta(days=days)).strftime("%Y-%m-%d") if days else None
     if link:
         encrypted = crypto.encrypt_config(link)
         db.update_config(cfg_id, cfg["plan"], encrypted, expiry=expiry_date, service_id=new_slug, panel_id=cfg.get("panel_id"))
