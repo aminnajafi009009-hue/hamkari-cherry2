@@ -3414,6 +3414,17 @@ def set_panel_plan_map(scope,scope_id,panel_id,remote_ref,remote_name=None):
     with transaction() as cur: cur.execute("INSERT INTO panel_plan_map(scope,scope_id,panel_id,remote_ref,remote_name,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(scope,scope_id) DO UPDATE SET panel_id=excluded.panel_id,remote_ref=excluded.remote_ref,remote_name=excluded.remote_name",(scope,int(scope_id),int(panel_id),str(remote_ref),remote_name,_now()))
 def get_panel_plan_map(scope,scope_id):
     cur=get_connection().cursor(); cur.execute('SELECT * FROM panel_plan_map WHERE scope=? AND scope_id=?',(scope,int(scope_id))); return _fetchone(cur)
+def list_panel_plan_maps(scope=None, panel_id=None):
+    cur=get_connection().cursor()
+    q='SELECT * FROM panel_plan_map'
+    clauses=[]; vals=[]
+    if scope:
+        clauses.append('scope=?'); vals.append(scope)
+    if panel_id is not None:
+        clauses.append('panel_id=?'); vals.append(int(panel_id))
+    if clauses: q += ' WHERE ' + ' AND '.join(clauses)
+    q += ' ORDER BY id'
+    cur.execute(q, vals); return _fetchall(cur)
 def delete_panel_plan_map(scope,scope_id):
     with transaction() as cur: cur.execute('DELETE FROM panel_plan_map WHERE scope=? AND scope_id=?',(scope,int(scope_id)))
 def get_panel_map_for_plan_key(plan_key):
