@@ -326,6 +326,8 @@ TEXT_CATEGORIES.setdefault("🎛 دکمه‌های کاربر", []).extend([
     ("crypto_asset_trx", "🔴 TRX"),
     ("crypto_asset_usdt", "🟢 USDT (TRC20)"),
     ("crypto_receipt_hint", "📨 ارسال رسید / Hash"),
+    ("renew_pay_card", "💳 پرداخت کارت به کارت"),
+    ("renew_pay_crypto", "💱 پرداخت ارزی"),
     ("renew_pay_back", "🔙 بازگشت"),
     ("renew_cancel", "❌ لغو تمدید"),
     ("renew_volume_10", "۱۰ گیگ"),
