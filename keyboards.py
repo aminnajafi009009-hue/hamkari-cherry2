@@ -1598,14 +1598,24 @@ def admin_permissions_keyboard(admin_id: str, selected=None):
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-# 🖥 مدیریت پنل‌های VPN — هر سه نوع (شاهراه/مرزبان/پاسارگارد) هم‌زمان
-# فعال هستند و هر کدام می‌تواند چند نمونه (Instance) هم‌زمان داشته باشد.
+# 🖥 مدیریت پنل‌های VPN — مرزبان، پاسارگارد و 3X-UI؛ هرکدام می‌تواند
+# چند نمونه (Instance) هم‌زمان داشته باشد.
 # ---------------------------------------------------------------------------
+def _panel_type_label(panel_type: str) -> str:
+    """برچسب نوع پنل را بدون وابستگی به aliasهای قدیمی برمی‌گرداند."""
+    labels = getattr(panels, "PANEL_TYPE_LABELS", {})
+    if isinstance(labels, dict):
+        return labels.get(panel_type, panel_type)
+    # سازگاری با نسخه‌هایی که PANEL_TYPE_LABELS را اشتباهاً به صورت list نگه داشته‌اند.
+    return {"marzban": "مرزبان", "pasargad": "پاسارگارد", "threexui": "3X-UI"}.get(panel_type, panel_type)
+
 def admin_vpn_panel_types_keyboard():
-    """قدم اول: انتخاب نوع پنل برای مدیریت. هر سه نوع مستقل هم‌زمان قابل فعال‌شدن هستند."""
+    """قدم اول: انتخاب نوع پنل؛ فقط پنل‌های پشتیبانی‌شده نمایش داده می‌شوند."""
+    panel_types = list(getattr(panels, "PANEL_TYPES", ("marzban", "pasargad", "threexui")))
+    panel_types = [t for t in panel_types if t in ("marzban", "pasargad", "threexui")]
     buttons = [
-        [InlineKeyboardButton(text=panels.PANEL_TYPE_LABELS[t], callback_data=f"vpntype|{t}", style="primary")]
-        for t in panels.PANEL_TYPES
+        [InlineKeyboardButton(text=_panel_type_label(t), callback_data=f"vpntype|{t}", style="primary")]
+        for t in panel_types
     ]
     buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin_back", style="primary")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -1621,7 +1631,7 @@ def admin_vpn_panel_list_keyboard(panel_type: str, panels: list[dict]):
             text=f"{mark} {p['name']}", callback_data=f"vpndetail|{p['id']}", style="primary"
         )])
     buttons.append([InlineKeyboardButton(
-        text=f"➕ افزودن پنل {panels.PANEL_TYPE_LABELS.get(panel_type, panel_type)} جدید",
+        text=f"➕ افزودن پنل {_panel_type_label(panel_type)} جدید",
         callback_data=f"vpnadd|{panel_type}", style="success",
     )])
     buttons.append([InlineKeyboardButton(text="🔙 بازگشت به انتخاب نوع پنل", callback_data="admin_vpn_panels", style="primary")])
@@ -1662,17 +1672,14 @@ def admin_vpn_panel_edit_menu_keyboard(panel: dict):
         [InlineKeyboardButton(text="✏️ نام", callback_data=f"vpneditfield|{pid}|name", style="primary")],
         [InlineKeyboardButton(text="✏️ آدرس پایه (base URL)", callback_data=f"vpneditfield|{pid}|base_url", style="primary")],
     ]
-    if panel["panel_type"] not in panels.PANEL_AUTH_METHODS:
-        buttons.append([InlineKeyboardButton(text="⚠️ نوع پنل پشتیبانی نمی‌شود", callback_data=f"vpndetail|{pid}", style="danger")])
+    auth_method = panel.get("auth_method") or "userpass"
+    if auth_method == "api_key":
+        buttons.append([InlineKeyboardButton(text="✏️ API Key", callback_data=f"vpneditfield|{pid}|api_key", style="primary")])
     else:
-        auth_method = panel.get("auth_method") or "userpass"
-        if auth_method == "api_key":
-            buttons.append([InlineKeyboardButton(text="✏️ API Key", callback_data=f"vpneditfield|{pid}|api_key", style="primary")])
-        else:
-            buttons.append([InlineKeyboardButton(text="✏️ نام کاربری", callback_data=f"vpneditfield|{pid}|username", style="primary")])
-            buttons.append([InlineKeyboardButton(text="✏️ رمز عبور", callback_data=f"vpneditfield|{pid}|password", style="primary")])
-        other = "👤 یوزرنیم/پسورد" if auth_method == "api_key" else "🔑 API Key"
-        buttons.append([InlineKeyboardButton(text=f"🔀 تغییر روش اتصال به {other}", callback_data=f"vpnauthswitch|{pid}", style="secondary")])
+        buttons.append([InlineKeyboardButton(text="✏️ نام کاربری", callback_data=f"vpneditfield|{pid}|username", style="primary")])
+        buttons.append([InlineKeyboardButton(text="✏️ رمز عبور", callback_data=f"vpneditfield|{pid}|password", style="primary")])
+    other = "👤 یوزرنیم/پسورد" if auth_method == "api_key" else "🔑 API Key"
+    buttons.append([InlineKeyboardButton(text=f"🔀 تغییر روش اتصال به {other}", callback_data=f"vpnauthswitch|{pid}", style="secondary")])
     buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"vpndetail|{pid}", style="primary")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
