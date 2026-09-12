@@ -1584,8 +1584,15 @@ def _chunk2(items):
     return rows
 
 
-def _text_manager_keyboard(category: str | None = None):
-    """مدیریت متن‌ها؛ در هر ردیف تا ۲ دکمه (🐛 فیکس: قبلاً ۳ دکمه در هر ردیف بود که روی صفحه‌کلید شلوغ و فشرده بود)."""
+_TEXT_EDITOR_PAGE_SIZE = 30  # 15 ردیف دو ستونه؛ از ساخت کیبوردهای خیلی بلند جلوگیری می‌کند.
+
+def _text_manager_keyboard(category: str | None = None, page: int = 0):
+    """مدیریت متن‌ها با صفحه‌بندی.
+
+    تلگرام روی تعداد/ارتفاع کیبوردهای Inline محدودیت‌های عملی دارد؛ بنابراین
+    دسته‌های بزرگ مثل «📦 سرویس‌های من» دیگر ۸۶ دکمه را یک‌جا نمی‌سازند.
+    هر صفحه حداکثر ۳۰ مورد دارد و دکمه‌های قبل/بعد پایین لیست قرار می‌گیرند.
+    """
     buttons = []
     if category is None:
         categories = list(TEXT_CATEGORIES.keys())
@@ -1603,6 +1610,11 @@ def _text_manager_keyboard(category: str | None = None):
         return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
     items = TEXT_CATEGORIES.get(category, [])
+    total_pages = max(1, (len(items) + _TEXT_EDITOR_PAGE_SIZE - 1) // _TEXT_EDITOR_PAGE_SIZE)
+    page = max(0, min(int(page), total_pages - 1))
+    start = page * _TEXT_EDITOR_PAGE_SIZE
+    page_items = items[start:start + _TEXT_EDITOR_PAGE_SIZE]
+
     delivery_labels = {
         "service_delivery_text": "✏️ تغییر متن تحویل سرویس (بسته‌ها)",
         "service_delivery_apps_button": "📱 دکمه لینک برنامه‌ها (بسته‌ها)",
@@ -1611,9 +1623,9 @@ def _text_manager_keyboard(category: str | None = None):
         "service_delivery_test_apps_button": "📱 دکمه لینک برنامه‌ها (تست)",
         "service_delivery_test_connection_button": "🔧 دکمه اتصال کانفینگ (تست)",
     }
-    for i in range(0, len(items), 2):
+    for i in range(0, len(page_items), 2):
         row = []
-        for key, default in items[i:i + 2]:
+        for key, default in page_items[i:i + 2]:
             value = user_text(key, default).replace("\n", " ")[:22]
             label = delivery_labels.get(key, f"✏️ {key[:14]} | {value}")
             if key in delivery_labels:
@@ -1624,6 +1636,28 @@ def _text_manager_keyboard(category: str | None = None):
                 style="primary",
             ))
         buttons.append(row)
+
+    if total_pages > 1:
+        nav = []
+        if page > 0:
+            nav.append(InlineKeyboardButton(
+                text="⬅️ صفحه قبل",
+                callback_data=f"textcatpage_{list(TEXT_CATEGORIES.keys()).index(category)}_{page - 1}",
+                style="primary",
+            ))
+        nav.append(InlineKeyboardButton(
+            text=f"📄 {page + 1}/{total_pages}",
+            callback_data="noop",
+            style="primary",
+        ))
+        if page < total_pages - 1:
+            nav.append(InlineKeyboardButton(
+                text="➡️ صفحه بعد",
+                callback_data=f"textcatpage_{list(TEXT_CATEGORIES.keys()).index(category)}_{page + 1}",
+                style="primary",
+            ))
+        buttons.append(nav)
+
     buttons.append([InlineKeyboardButton(text="🔙 بازگشت به دسته‌ها", callback_data="admin_texts", style="primary")])
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -1636,6 +1670,28 @@ async def admin_texts(callback: types.CallbackQuery, state: FSMContext):
     await edit_rich(callback.message, 
         "📝 مدیریت جامع متن‌های کاربر و اعلان‌ها\n\nیک بخش را انتخاب کنید:",
         reply_markup=_text_manager_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("textcatpage_"))
+async def admin_text_category_page(callback: types.CallbackQuery, state: FSMContext):
+    """جابجایی بین صفحات یک دسته‌ی بزرگ در ویرایشگر متن."""
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔ دسترسی ندارید.", show_alert=True); return
+    try:
+        _, index_raw, page_raw = callback.data.split("_", 2)
+        index = int(index_raw)
+        page = int(page_raw)
+        category = list(TEXT_CATEGORIES.keys())[index]
+    except Exception:
+        await callback.answer("❌ صفحه‌ی متن پیدا نشد.", show_alert=True); return
+    await state.clear()
+    note = "\n\n🔒 متن انقضای فاکتور کارت‌به‌کارت سیستمی است و از اینجا قابل تغییر نیست." if "فاکتور کارت‌به‌کارت" in category else ""
+    await edit_rich(
+        callback.message,
+        f"📝 {category}\n\nمتن موردنظر را برای ویرایش انتخاب کنید:{note}",
+        reply_markup=_text_manager_keyboard(category, page=page),
     )
     await callback.answer()
 
@@ -1653,7 +1709,7 @@ async def admin_text_category(callback: types.CallbackQuery, state: FSMContext):
     note = "\n\n🔒 متن انقضای فاکتور کارت‌به‌کارت سیستمی است و از اینجا قابل تغییر نیست." if "فاکتور کارت‌به‌کارت" in category else ""
     await edit_rich(callback.message, 
         f"📝 {category}\n\nمتن موردنظر را برای ویرایش انتخاب کنید:{note}",
-        reply_markup=_text_manager_keyboard(category),
+        reply_markup=_text_manager_keyboard(category, page=0),
     )
     await callback.answer()
 
@@ -1725,7 +1781,14 @@ async def admin_text_edit_save(message: types.Message, state: FSMContext):
     refresh_user_text(key)
     await state.clear()
     category = CATEGORY_BY_KEY.get(key)
-    await answer_rich(message, "✅ متن ذخیره شد.", reply_markup=_text_manager_keyboard(category))
+    page = 0
+    if category:
+        items = TEXT_CATEGORIES.get(category, [])
+        for idx, (item_key, _default) in enumerate(items):
+            if item_key == key:
+                page = idx // _TEXT_EDITOR_PAGE_SIZE
+                break
+    await answer_rich(message, "✅ متن ذخیره شد.", reply_markup=_text_manager_keyboard(category, page=page))
 
 
 # 📥 صف سفارشات — لیست خریدهای تأییدشده‌ای که هنوز کانفیگ‌شان ارسال نشده،
