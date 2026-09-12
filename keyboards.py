@@ -1431,6 +1431,104 @@ def admin_pasargad_menu(status_text: str):
 
 
 # ---------------------------------------------------------------------------
+# 🛡️ کیبوردهای مدیریت چندنمونه‌ای پنل پاسارگارد
+# ---------------------------------------------------------------------------
+def admin_pasargad_panels_keyboard(panels=None):
+    """لیست پنل‌های پاسارگارد برای handler جدید panel_admin."""
+    buttons = []
+    for panel in (panels or []):
+        pid = panel.get("id")
+        name = panel.get("name") or f"پنل {pid}"
+        status = "🟢" if panel.get("enabled") else "🔴"
+        buttons.append([InlineKeyboardButton(
+            text=f"{status} {name}",
+            callback_data=f"pp_detail|{pid}",
+            style="success" if panel.get("enabled") else "danger",
+        )])
+    buttons.append([InlineKeyboardButton(text="➕ افزودن پنل", callback_data="pp_add", style="success")])
+    buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin_back", style="primary")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def admin_pasargad_panel_detail_keyboard(panel):
+    """جزئیات یک پنل پاسارگارد."""
+    pid = panel.get("id")
+    enabled = bool(panel.get("enabled"))
+    buttons = [
+        [InlineKeyboardButton(text="🔌 تست اتصال", callback_data=f"pp_test|{pid}", style="primary")],
+        [InlineKeyboardButton(
+            text="⛔ غیرفعال کردن" if enabled else "✅ فعال کردن",
+            callback_data=f"pp_toggle|{pid}",
+            style="danger" if enabled else "success",
+        )],
+        [InlineKeyboardButton(text="✏️ ویرایش اطلاعات", callback_data=f"pp_edit|{pid}", style="primary")],
+        [InlineKeyboardButton(text="🗑 حذف پنل", callback_data=f"pp_delete|{pid}", style="danger")],
+        [InlineKeyboardButton(text="🔙 لیست پنل‌ها", callback_data="admin_pasargad_panels", style="primary")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def admin_pasargad_panel_edit_keyboard(panel):
+    """انتخاب فیلد قابل ویرایش پنل پاسارگارد."""
+    pid = panel.get("id")
+    buttons = [
+        [InlineKeyboardButton(text="📝 نام پنل", callback_data=f"pp_editfield|{pid}|name", style="primary")],
+        [InlineKeyboardButton(text="🌐 آدرس پنل", callback_data=f"pp_editfield|{pid}|base_url", style="primary")],
+        [InlineKeyboardButton(text="👤 نام کاربری", callback_data=f"pp_editfield|{pid}|username", style="primary")],
+        [InlineKeyboardButton(text="🔑 رمز عبور", callback_data=f"pp_editfield|{pid}|password", style="primary")],
+        [InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"pp_detail|{pid}", style="primary")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def admin_vip_plan_panel_keyboard(plan_key: str, panels=None, selected_panel_id=None):
+    """انتخاب پنل پاسارگارد برای یک پلن VIP."""
+    buttons = []
+    for panel in (panels or []):
+        pid = panel.get("id")
+        if not pid:
+            continue
+        selected = str(pid) == str(selected_panel_id)
+        name = panel.get("name") or f"پنل {pid}"
+        buttons.append([InlineKeyboardButton(
+            text=("✅ " if selected else "🖥️ ") + name,
+            callback_data=f"vipplanpanelset|{plan_key}|{pid}",
+            style="success" if selected else "primary",
+        )])
+    if selected_panel_id:
+        buttons.append([InlineKeyboardButton(
+            text="🚫 حذف اتصال پنل",
+            callback_data=f"vipplanpanelclear|{plan_key}",
+            style="danger",
+        )])
+    buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"vipplan_{plan_key}", style="primary")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def admin_vip_plan_panel_template_keyboard(plan_key: str, panel_id: int, templates=None):
+    """انتخاب User Template پاسارگارد برای پلن VIP."""
+    buttons = []
+    for template in (templates or []):
+        if not isinstance(template, dict) or template.get("id") is None:
+            continue
+        tid = template.get("id")
+        name = template.get("name") or template.get("remark") or str(tid)
+        buttons.append([InlineKeyboardButton(
+            text=f"📦 {name}",
+            callback_data=f"vipplanpaneltemplate|{plan_key}|{panel_id}|{tid}",
+            style="primary",
+        )])
+    if not buttons:
+        buttons.append([InlineKeyboardButton(
+            text="⚠️ تمپلیتی پیدا نشد",
+            callback_data=f"vipplanpanel|{plan_key}",
+            style="danger",
+        )])
+    buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data=f"vipplanpanel|{plan_key}", style="primary")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+# ---------------------------------------------------------------------------
 # 🔀 انتخاب پنل VPN فعال (وقتی هردو پنل مرزبان و پاسارگارد متصل باشند)
 # ---------------------------------------------------------------------------
 def admin_panel_choose_menu(available: list, active: str | None):
