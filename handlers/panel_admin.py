@@ -100,6 +100,11 @@ router.message.middleware(AdminPermissionMiddleware())
 router.callback_query.middleware(AdminPermissionMiddleware())
 logger = logging.getLogger(__name__)
 
+# برچسب‌های ثابت منوی مدیریت پنل؛ عمداً مستقل از هر متغیر محلی به نام panels.
+_PANEL_TYPE_LABELS = {"marzban": "مرزبان", "pasargad": "پاسارگارد", "threexui": "3X-UI"}
+def _panel_type_label(panel_type: str) -> str:
+    return _PANEL_TYPE_LABELS.get(str(panel_type), str(panel_type))
+
 try:
     import qrcode
 except ImportError:
@@ -380,7 +385,7 @@ async def open_vpn_panel_type_list(callback: types.CallbackQuery):
         await callback.answer("❌ نوع پنل نامعتبر.", show_alert=True)
         return
     instances = db.list_vpn_panels(panel_type=panel_type)
-    label = panels.PANEL_TYPE_LABELS[panel_type]
+    label = _panel_type_label(panel_type)
     text = f"🖥 نمونه‌های پنل {label}"
     if not instances:
         text += "\n\nهنوز هیچ نمونه‌ای از این نوع اضافه نشده. می‌تونی چند نمونه هم‌زمان از این نوع اضافه کنی."
@@ -478,7 +483,7 @@ async def vpn_panel_delete(callback: types.CallbackQuery):
     db.delete_vpn_panel(panel_id)
     instances = db.list_vpn_panels(panel_type=panel_type)
     await callback.message.edit_text(
-        f"🗑 حذف شد. نمونه‌های فعلی پنل {panels.PANEL_TYPE_LABELS[panel_type]}:",
+        f"🗑 حذف شد. نمونه‌های فعلی پنل {_panel_type_label(panel_type)}:",
         reply_markup=admin_vpn_panel_list_keyboard(panel_type, instances),
     )
     await callback.answer()
@@ -498,7 +503,7 @@ async def vpn_panel_add_start(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(new_panel_type=panel_type)
     await state.set_state(AdminStates.waiting_panel_name)
     await callback.message.edit_text(
-        f"➕ افزودن پنل {panels.PANEL_TYPE_LABELS[panel_type]} جدید\n\n"
+        f"➕ افزودن پنل {_panel_type_label(panel_type)} جدید\n\n"
         "یک نام دلخواه برای این نمونه بفرست (فقط برای تشخیص خودت در لیست، مثلاً «سرور 1 المان»):",
         reply_markup=admin_vpn_panel_types_cancel_keyboard(),
     )
