@@ -84,6 +84,13 @@ class AdminStates(StatesGroup):
     # 🔗 اتصال پنل مرزبان — فقط برای وقتی که تشخیص خودکار لینک ساب از پاسخ
     # create/renew ممکن نشود و لازم باشد ادمین یک‌بار دستی لینک را وارد کند.
     waiting_marzban_manual_link = State()
+    # سازگاری با مسیرهای قدیمی مدیریت پنل؛ همان state لینک دستی مرزبان است.
+    waiting_panel_manual_link = waiting_marzban_manual_link
+
+    # States used by the admin manual-service creation flow.
+    waiting_admin_service_volume = State()
+    waiting_admin_service_days = State()
+    waiting_admin_service_name = State()
 
     # 🆕 تمدید داینامیک یک سرویس (بدون انتخاب تمپلیت): ادمین حجم (گیگ) و بعد تعداد روز را مستقیماً تایپ می‌کند
     waiting_marzban_renew_volume = State()
@@ -119,3 +126,7 @@ class AdminStates(StatesGroup):
 
     # 👮 مدیریت ادمین‌های فرعی
     waiting_sub_admin_id = State()
+
+
+
+
