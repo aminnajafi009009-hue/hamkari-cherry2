@@ -284,7 +284,6 @@ def all_reply_menu_texts() -> set[str]:
 # منوی اصلی (Inline) — کاربر عادی
 # ---------------------------------------------------------------------------
 def main_menu():
-    """منوی Inline اصلی؛ با منوی Reply Keyboard از نظر ترتیب و رنگ همسان است."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t("main_free_test"), callback_data="buy_plan_test", style="success"), InlineKeyboardButton(text=t("main_buy"), callback_data="plans", style="success")],
         [InlineKeyboardButton(text=t("main_wallet"), callback_data="wallet", style="success"), InlineKeyboardButton(text=t("main_renew"), callback_data="renew", style="success")],
@@ -292,7 +291,6 @@ def main_menu():
         [InlineKeyboardButton(text=t("main_guides"), callback_data="user_guides", style="primary"), InlineKeyboardButton(text=t("main_support"), callback_data="support", style="primary")],
         [InlineKeyboardButton(text=t("main_agency"), callback_data="agency_request", style="danger"), InlineKeyboardButton(text=t("main_referral"), callback_data="referral", style="danger")],
     ])
-
 
 def back_button(callback_data: str = "back", text: str | None = None):
     if text is None:
@@ -743,8 +741,8 @@ def admin_purchase_notify_keyboard(uid: str, plan_key: str | None = None, order_
         mapping = db.get_panel_map_for_plan_key(plan_key)
         if mapping and mapping.get("panel_id") and mapping.get("remote_ref") is not None:
             auto_row = [[InlineKeyboardButton(
-                text="📤 ارسال خودکار از پنل نگاشت‌شده", callback_data=f"marzbansend|{uid}|{plan_key}|{oid}"
-            , style="primary")]]
+                text="📤 ارسال خودکار از پنل نگاشت‌شده", callback_data=f"marzbansend|{uid}|{plan_key}|{oid}", style="primary"
+            )]]
 
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚀 ارسال کانفیگ VIP (QR) — دستی", callback_data=f"sendvip_{uid}{suffix}", style="primary")],
@@ -1488,11 +1486,14 @@ def admin_pasargad_panel_mapping_keyboard(panel_id: int, plans, mappings=None, p
     page = max(0, min(int(page), total_pages - 1))
     chunk = plans[page * per_page:(page + 1) * per_page]
     buttons = []
-    # تست رایگان یک نگاشت مستقل دارد و باید در همین صفحه قابل تنظیم باشد.
     test_map = db.get_panel_plan_map("free_test", 0)
     test_selected = bool(test_map and str(test_map.get("panel_id")) == str(panel_id))
-    test_label = "🟢 🧪 تست رایگان ← " + str(test_map.get("remote_name") or test_map.get("remote_ref") or "تمپلیت") if test_selected else "🧪 تست رایگان — بدون نگاشت"
-    buttons.append([InlineKeyboardButton(text=test_label, callback_data=f"pp_maptest|{panel_id}", style="success" if test_selected else "primary")])
+    test_label = (f"🟢 🧪 تست رایگان ← {test_map.get('remote_name') or test_map.get('remote_ref') or 'تمپلیت'}"
+                  if test_selected else "🧪 تست رایگان — بدون نگاشت")
+    buttons.append([InlineKeyboardButton(
+        text=test_label, callback_data=f"pp_maptest|{panel_id}",
+        style="success" if test_selected else "primary"
+    )])
     for plan in chunk:
         pid = int(plan.get("id"))
         name = plan.get("name") or plan.get("plan_key") or f"پلن {pid}"
