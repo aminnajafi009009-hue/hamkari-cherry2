@@ -1653,11 +1653,11 @@ def admin_vpn_panel_types_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def admin_vpn_panel_list_keyboard(panel_type: str, panels: list[dict]):
+def admin_vpn_panel_list_keyboard(panel_type: str, panel_list: list[dict]):
     """لیست نمونه‌های ساخته‌شده از یک نوع پنل (می‌توانند چندتایی باشند
     و همه هم‌زمان فعال بمانند) + دکمه‌ی افزودن نمونه‌ی جدید."""
     buttons = []
-    for p in panels:
+    for p in panel_list:
         mark = "🟢" if p.get("enabled") else "🔴"
         buttons.append([InlineKeyboardButton(
             text=f"{mark} {p['name']}", callback_data=f"vpndetail|{p['id']}", style="primary"
