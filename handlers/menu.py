@@ -148,52 +148,52 @@ def _admin_perm(user_id: int, permission: str) -> bool:
 # منوی کاربر عادی
 # هر دکمهٔ Reply Keyboard یک عمل مستقیم دارد؛ دکمه‌ها تجمیعی نیستند.
 # ---------------------------------------------------------------------------
-@router.message(_MenuButtonText("main_free_test", "🎁 تست رایگان"))
+@router.message(_MenuButtonText("main_free_test", "تست"))
 async def menu_free_test_from_reply(message: types.Message, state: FSMContext):
     await menu_free_test(message, state)
 
 
-@router.message(_MenuButtonText("main_buy", "🛒 خرید اشتراک"))
+@router.message(_MenuButtonText("main_buy", "خرید اشتراک"))
 async def menu_plans_from_reply(message: types.Message, state: FSMContext):
     await menu_plans(message, state)
 
 
-@router.message(_MenuButtonText("main_wallet", "💰 کیف پول"))
+@router.message(_MenuButtonText("main_wallet", "کیف پول"))
 async def menu_wallet_from_reply(message: types.Message, state: FSMContext):
     await menu_wallet(message, state)
 
 
-@router.message(_MenuButtonText("main_renew", "🔁 تمدید سرویس"))
+@router.message(_MenuButtonText("main_renew", "تمدید"))
 async def menu_renew_from_reply(message: types.Message, state: FSMContext):
     await menu_renew(message, state)
 
 
-@router.message(_MenuButtonText("main_profile", "👤 پروفایل من"))
+@router.message(_MenuButtonText("main_profile", "پروفایل"))
 async def menu_profile_from_reply(message: types.Message, state: FSMContext):
     await menu_profile(message, state)
 
 
-@router.message(_MenuButtonText("main_configs", "📱 سرویس‌های من"))
+@router.message(_MenuButtonText("main_configs", "سرویس‌های من"))
 async def menu_configs_from_reply(message: types.Message, state: FSMContext):
-    await menu_configs(message, state)
+    await menu_my_configs(message, state)
 
 
-@router.message(_MenuButtonText("main_guides", "📚 راهنما"))
+@router.message(_MenuButtonText("main_guides", "راهنما"))
 async def menu_guides_from_reply(message: types.Message, state: FSMContext):
-    await menu_guides(message, state)
+    await menu_user_guides(message, state)
 
 
-@router.message(_MenuButtonText("main_support", "👨‍💻 پشتیبانی"))
+@router.message(_MenuButtonText("main_support", "پشتیبانی"))
 async def menu_support_from_reply(message: types.Message, state: FSMContext):
-    await menu_support(message, state)
+    await menu_ticket(message, state)
 
 
-@router.message(_MenuButtonText("main_referral", "👥 دعوت دوستان"))
+@router.message(_MenuButtonText("main_referral", "دعوت دوستان"))
 async def menu_referral_from_reply(message: types.Message, state: FSMContext):
     await menu_referral(message, state)
 
 
-@router.message(_MenuButtonText("main_agency", "🤝 نمایندگی"))
+@router.message(_MenuButtonText("main_agency", "نمایندگی"))
 async def menu_agency_from_reply(message: types.Message, state: FSMContext):
     await menu_agency_request_start(message, state)
 
@@ -216,7 +216,7 @@ async def menu_agency_callback(callback: types.CallbackQuery, state: FSMContext)
     await callback.answer()
 
 
-@router.message(_MenuButtonText("main_buy", "🛒 خرید اشتراک"))
+@router.message(_MenuButtonText("main_buy", "خرید اشتراک"))
 async def menu_plans(message: types.Message, state: FSMContext):
     await state.clear()
     if not db.is_orders_enabled():
@@ -231,7 +231,7 @@ async def menu_plans(message: types.Message, state: FSMContext):
     )
     
     
-@router.message(_MenuButtonText("main_free_test", "🎁 تست رایگان"))
+@router.message(_MenuButtonText("main_free_test", "تست"))
 async def menu_free_test(message: types.Message, state: FSMContext):
     from config import FREE_TEST_PLAN_KEY
 
@@ -267,7 +267,7 @@ async def menu_free_test(message: types.Message, state: FSMContext):
     )
 
 
-@router.message(_MenuButtonText("main_configs", "📱 سرویس‌های من"))
+@router.message(_MenuButtonText("main_configs", "سرویس‌های من"))
 async def menu_my_configs(message: types.Message, state: FSMContext):
     await state.clear()
     user = db.get_user(message.from_user.id)
@@ -291,7 +291,7 @@ async def menu_my_configs(message: types.Message, state: FSMContext):
 
 
 
-@router.message(_MenuButtonText("main_renew", "🔁 تمدید سرویس"))
+@router.message(_MenuButtonText("main_renew", "تمدید"))
 async def menu_renew(message: types.Message, state: FSMContext):
     await state.clear()
     user = db.get_user(message.from_user.id)
@@ -304,7 +304,7 @@ async def menu_renew(message: types.Message, state: FSMContext):
     await enrich_configs_with_subscription_names(configs)
     await show_menu_with_sticker(message.bot, message.chat.id, "renew_menu", t("renew_choose_service"), reply_markup=renew_services_keyboard(configs))
 
-@router.message(_MenuButtonText("main_wallet", "💰 کیف پول"))
+@router.message(_MenuButtonText("main_wallet", "کیف پول"))
 async def menu_wallet(message: types.Message, state: FSMContext):
     await state.clear()
     user = db.get_user(message.from_user.id)
@@ -316,7 +316,7 @@ async def menu_wallet(message: types.Message, state: FSMContext):
     await show_menu_with_sticker(message.bot, message.chat.id, "wallet", text, reply_markup=wallet_menu())
 
 
-@router.message(_MenuButtonText("main_referral", "👥 دعوت دوستان"))
+@router.message(_MenuButtonText("main_referral", "دعوت دوستان"))
 async def menu_referral(message: types.Message, state: FSMContext):
     await state.clear()
     user = db.get_user(message.from_user.id)
@@ -331,7 +331,7 @@ async def menu_referral(message: types.Message, state: FSMContext):
     await show_menu_with_sticker(message.bot, message.chat.id, "referral", text, reply_markup=referral_menu())
 
 
-@router.message(_MenuButtonText("main_profile", "👤 پروفایل من"))
+@router.message(_MenuButtonText("main_profile", "پروفایل"))
 async def menu_profile(message: types.Message, state: FSMContext):
     await state.clear()
     user = db.get_user(message.from_user.id)
@@ -360,7 +360,7 @@ def _user_guide_entities(guide: dict) -> list:
     return entities
 
 
-@router.message(_MenuButtonText("main_guides", "📚 راهنما"))
+@router.message(_MenuButtonText("main_guides", "راهنما"))
 async def menu_user_guides(message: types.Message, state: FSMContext):
     await state.clear()
     guides = db.get_guides()
@@ -444,7 +444,7 @@ async def menu_user_guide_open(callback: types.CallbackQuery):
     await callback.answer()
 
 
-@router.message(_MenuButtonText("main_support", "👨‍💻 پشتیبانی"))
+@router.message(_MenuButtonText("main_support", "پشتیبانی"))
 async def menu_ticket(message: types.Message, state: FSMContext):
     await state.clear()
     try:
