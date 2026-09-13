@@ -739,16 +739,19 @@ def admin_purchase_notify_keyboard(uid: str, plan_key: str | None = None, order_
     suffix = f"|{order_id}" if order_id else ""
     oid = order_id or 0
 
-    # اگر پنل مرزبان فعال است و برای دسته‌بندی این پلن یک planSlug نگاشت شده
-    # باشد، دکمه‌ی «ارسال خودکار از پنل» هم علاوه‌بر روش دستی (که هیچ تغییری
-    # نکرده) نمایش داده می‌شود؛ انتخاب نهایی همیشه با ادمین است.
+    # نگاشت جدید چندپنلی: اگر برای همین پلن/دسته یک نمونه پنل فعال و یک
+    # remote_ref معتبر نگاشت شده باشد، دکمه ارسال خودکار نمایش داده می‌شود.
+    # panel_plan_map ستون enabled ندارد؛ فعال/غیرفعال بودن از vpn_panels خوانده می‌شود.
     auto_row = []
-    if vpn_panel.active_panel() and plan_key:
-        mapping = db.get_marzban_plan_map_for_plan_key(plan_key)
-        if mapping:
-            auto_row = [[InlineKeyboardButton(
-                text="📤 ارسال خودکار از پنل فعال", callback_data=f"marzbansend|{uid}|{plan_key}|{oid}"
-            , style="primary")]]
+    if plan_key:
+        mapping = db.get_panel_map_for_plan_key(plan_key)
+        if mapping and mapping.get("panel_id") is not None and mapping.get("remote_ref") is not None:
+            mapped_panel = db.get_vpn_panel(mapping["panel_id"])
+            if mapped_panel and mapped_panel.get("enabled"):
+                auto_row = [[InlineKeyboardButton(
+                    text="📤 ارسال خودکار از پنل", callback_data=f"panelsend|{uid}|{plan_key}|{oid}",
+                    style="primary"
+                )]]
 
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚀 ارسال کانفیگ VIP (QR) — دستی", callback_data=f"sendvip_{uid}{suffix}", style="primary")],
