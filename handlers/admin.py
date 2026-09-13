@@ -159,7 +159,7 @@ def _permission_for_callback(data: str | None) -> str | None:
         (("errlog",), "logs"),
         (("admin_backup",), "backup"),
         (("admin_orders_off", "admin_orders_on"), "orders_toggle"),
-        (("free_test", "admin_free_test_settings", "admin_renewal_settings", "renewset"), "settings"),
+        (("free_test", "admin_free_test_settings", "admin_renewal_settings", "renewset", "botinforenewal", "botinforenewcat_", "botinforenewgb_", "botinforenewday_"), "settings"),
     ]
     for prefixes, perm in groups:
         if any(d == x or d.startswith(x) for x in prefixes):
