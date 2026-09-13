@@ -420,7 +420,24 @@ async def renew_user_custom(panel: dict, username: str, volume_gb, days, device_
 
     body = {"data_limit": new_data_limit, "expire": new_expire, "status": "active"}
     requested_hwid = _apply_device_limit(body, device_limit)
-    return await _request_with_hwid_verification(panel, "PUT", f"/api/user/{username}", body, requested_hwid, username)
+    ok, data, msg = await _request_with_hwid_verification(panel, "PUT", f"/api/user/{username}", body, requested_hwid, username)
+    if not ok:
+        return ok, data, msg
+
+    # موفقیت HTTP به‌تنهایی کافی نیست؛ برای تمدید باید مقدار واقعی ثبت‌شده در
+    # پنل را دوباره بخوانیم تا پاسخ کاذب/ناقص API باعث اعلام «تمدید شد» نشود.
+    verify_ok, verify_data, verify_msg = await get_user(panel, username)
+    if not verify_ok or not isinstance(verify_data, dict):
+        return False, data, f"تمدید ارسال شد اما امکان تأیید مقدار ثبت‌شده در پنل وجود ندارد: {verify_msg}"
+    actual_limit = _to_epoch(verify_data.get("expire"))
+    expected_limit = int(new_expire or 0)
+    actual_data = int(verify_data.get("data_limit") or 0)
+    expected_data = int(new_data_limit or 0)
+    if expected_limit and actual_limit < expected_limit - 120:
+        return False, verify_data, f"تاریخ انقضا در پنل به مقدار موردنظر نرسید. مورد انتظار: {expected_limit} | ثبت‌شده: {actual_limit}"
+    if actual_data != expected_data:
+        return False, verify_data, f"حجم سرویس در پنل به مقدار موردنظر نرسید. مورد انتظار: {expected_data} | ثبت‌شده: {actual_data}"
+    return True, verify_data, "تمدید و تأیید شد"
 
 
 async def get_user(panel: dict, username: str):
