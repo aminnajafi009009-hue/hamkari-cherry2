@@ -17,6 +17,7 @@ from text_catalog import text as t
 import bot_info
 import vpn_panel
 import panels
+_PANEL_MODULE = panels
 from config import UNIQUEPAY_ENABLED, MARZBAN_ENABLED, PASARGAD_ENABLED, ONLINE_PAYMENT_MIN_AMOUNT
 
 
@@ -1646,7 +1647,7 @@ def admin_permissions_keyboard(admin_id: str, selected=None):
 def admin_vpn_panel_types_keyboard():
     """قدم اول: انتخاب نوع پنل برای مدیریت. هر سه نوع مستقل هم‌زمان قابل فعال‌شدن هستند."""
     buttons = [
-        [InlineKeyboardButton(text=panels.PANEL_TYPE_LABELS[t], callback_data=f"vpntype|{t}", style="primary")]
+        [InlineKeyboardButton(text=_PANEL_MODULE.PANEL_TYPE_LABELS[t], callback_data=f"vpntype|{t}", style="primary")]
         for t in panels.PANEL_TYPES
     ]
     buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin_back", style="primary")])
@@ -1663,7 +1664,7 @@ def admin_vpn_panel_list_keyboard(panel_type: str, panel_list: list[dict]):
             text=f"{mark} {p['name']}", callback_data=f"vpndetail|{p['id']}", style="primary"
         )])
     buttons.append([InlineKeyboardButton(
-        text=f"➕ افزودن پنل {panels.PANEL_TYPE_LABELS.get(panel_type, panel_type)} جدید",
+        text=f"➕ افزودن پنل {_PANEL_MODULE.PANEL_TYPE_LABELS.get(panel_type, panel_type)} جدید",
         callback_data=f"vpnadd|{panel_type}", style="success",
     )])
     buttons.append([InlineKeyboardButton(text="🔙 بازگشت به انتخاب نوع پنل", callback_data="admin_vpn_panels", style="primary")])
