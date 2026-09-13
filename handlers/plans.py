@@ -919,17 +919,34 @@ async def renew_choose_service(callback: types.CallbackQuery, state: FSMContext)
     except Exception:
         cfg_id = 0
     cfg = db.get_config_by_id(cfg_id) if user else None
-    if not user or not cfg or cfg.get("user_id") != user["id"] or cfg.get("deleted"):
+    if not user or not cfg or cfg.get("deleted"):
         await callback.answer(t("service_not_owned"), show_alert=True)
         return
 
+    # مالکیت را از لیست سرویس‌های خود کاربر هم تأیید می‌کنیم. در بعضی دیتابیس‌های
+    # قدیمی ممکن است user_id سرویس با شناسه داخلی کاربر ناسازگار/قدیمی باشد؛
+    # در این حالت نباید کاربر صاحب سرویس، بی‌دلیل «این سرویس برای شما نیست» بگیرد.
+    owned_cfg = next((c for c in db.get_configs(user["id"], include_deleted=True)
+                      if int(c.get("id", 0)) == cfg_id), None)
+    if not owned_cfg:
+        await callback.answer(t("service_not_owned"), show_alert=True)
+        return
+    cfg = owned_cfg
+
     await enrich_configs_with_subscription_names([cfg])
     name = cfg.get("_display_name") or cfg.get("plan") or "سرویس"
-    settings = bot_info.get_renewal_settings(cfg.get("category_id"))
+    category_id = cfg.get("category_id")
+    if not category_id:
+        try:
+            plan = db.get_vip_plan(cfg.get("plan"))
+            category_id = plan.get("category_id") if plan else None
+        except Exception:
+            category_id = None
+    settings = bot_info.get_renewal_settings(category_id)
     mode = settings["mode"]
     await state.update_data(
         renew_cfg_id=cfg_id, renew_service_name=name, renew_mode=mode,
-        renew_category_id=cfg.get("category_id"),
+        renew_category_id=category_id, renew_telegram_id=callback.from_user.id,
     )
 
     if mode == "gb":
@@ -962,13 +979,34 @@ def _renew_validate(settings: dict, volume_gb: float, days: int) -> tuple[bool, 
 async def _renew_prepare_payment(target, state, volume_gb=0, days=0):
     data = await state.get_data()
     cfg = db.get_config_by_id(data.get("renew_cfg_id")) if data.get("renew_cfg_id") else None
-    user = db.get_user(target.from_user.id)
-    if not cfg or not user or cfg.get("user_id") != user["id"]:
+    # در CallbackQuery، target همان callback.message است و from_user آن، خودِ
+    # بات است؛ بنابراین مالکیت نباید از target.from_user خوانده شود. شناسه‌ی
+    # واقعی کاربر را از state نگه می‌داریم و در صورت نبودن، از target فقط برای
+    # پیام‌های معمولی استفاده می‌کنیم.
+    telegram_id = data.get("renew_telegram_id")
+    if telegram_id is None:
+        telegram_id = getattr(getattr(target, "from_user", None), "id", None)
+    user = db.get_user(telegram_id) if telegram_id is not None else None
+    if not cfg or not user or cfg.get("deleted"):
         await answer_rich(target, t("service_not_owned"))
         await state.clear()
         return
+    owned_cfg = next((c for c in db.get_configs(user["id"], include_deleted=True)
+                      if int(c.get("id", 0)) == int(cfg.get("id", 0))), None)
+    if not owned_cfg:
+        await answer_rich(target, t("service_not_owned"))
+        await state.clear()
+        return
+    cfg = owned_cfg
 
-    settings = bot_info.get_renewal_settings(cfg.get("category_id") or data.get("renew_category_id"))
+    category_id = cfg.get("category_id") or data.get("renew_category_id")
+    if not category_id:
+        try:
+            plan = db.get_vip_plan(cfg.get("plan"))
+            category_id = plan.get("category_id") if plan else None
+        except Exception:
+            category_id = None
+    settings = bot_info.get_renewal_settings(category_id)
     mode = settings.get("mode", "day")
     if mode == "day":
         volume_gb = 0
