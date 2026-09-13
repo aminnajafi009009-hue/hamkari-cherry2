@@ -86,6 +86,7 @@ from config import (
     ADMIN_ID,
     UNIQUEPAY_ENABLED,
     FREE_TEST_PLAN_KEY,
+    ONLINE_PAYMENT_MIN_AMOUNT,
 )
 from keyboards import (
     main_reply_keyboard,
@@ -114,6 +115,75 @@ ORDERS_CLOSED_TEXT = (
 )
 
 plan_type = db.plan_type  # نسخه‌ی DB-aware (دسته‌بندی‌های VIP را هم می‌شناسد)
+
+
+def _renewal_settings(category_id):
+    """تنظیمات تمدید واقعی دسته را از کلیدهای canonical دیتابیس می‌خواند.
+
+    این مسیر عمداً قبل از fallbackهای قدیمی bot_info بررسی می‌شود تا مقادیر
+    پیش‌فرض عمومی نتوانند تنظیمات ذخیره‌شده‌ی یک دسته را override کنند.
+    """
+    try:
+        cid = int(category_id or 0)
+    except Exception:
+        cid = 0
+    defaults = {
+        "mode": "day", "price_day": 0, "price_gb": 5500,
+        "min_day": 1, "max_day": 0, "min_gb": 1, "max_gb": 0,
+    }
+    if cid <= 0:
+        try:
+            legacy = bot_info.get_renewal_settings(category_id)
+            if isinstance(legacy, dict):
+                defaults.update(legacy)
+        except Exception:
+            pass
+        return defaults
+    keymap = {
+        "mode": f"renewal_category_{cid}_mode",
+        "price_day": f"renewal_category_{cid}_price_day",
+        "price_gb": f"renewal_category_{cid}_price_gb",
+        "min_day": f"renewal_category_{cid}_min_day",
+        "max_day": f"renewal_category_{cid}_max_day",
+        "min_gb": f"renewal_category_{cid}_min_gb",
+        "max_gb": f"renewal_category_{cid}_max_gb",
+    }
+    for field, key in keymap.items():
+        raw = db.get_setting(key)
+        if raw not in (None, ""):
+            try:
+                defaults[field] = raw if field == "mode" else int(float(raw))
+            except Exception:
+                pass
+    # مقادیر قدیمی bot_info فقط برای فیلدهایی استفاده شوند که هنوز canonical
+    # نیستند؛ هر مقدار ذخیره‌شده‌ی دسته‌ای در DB اولویت قطعی دارد.
+    try:
+        legacy = bot_info.get_renewal_settings(cid)
+        if isinstance(legacy, dict):
+            for field in defaults:
+                if db.get_setting(keymap[field]) in (None, "") and field in legacy:
+                    defaults[field] = legacy[field]
+    except Exception:
+        pass
+    if defaults["mode"] not in ("day", "gb", "both"):
+        defaults["mode"] = "day"
+    return defaults
+
+
+def _renewal_category_id(cfg):
+    cid = cfg.get("category_id")
+    if cid:
+        try:
+            return int(cid)
+        except Exception:
+            pass
+    try:
+        plan = db.get_vip_plan(cfg.get("plan"))
+        if plan and plan.get("category_id"):
+            return int(plan["category_id"])
+    except Exception:
+        pass
+    return None
 
 
 router = Router(name="plans")
@@ -731,25 +801,41 @@ async def check_online_payment(callback: types.CallbackQuery):
 
     payment_kind = payment.get("kind")
 
-    # 🐛 فیکس: قبلاً پیام موفقیت/تأییدیه بعد از finalize_* فرستاده می‌شد، در حالی که خود finalize_online_payment/
-    # finalize_custom_online_payment در داخلشان (برای VIP/تست) سرویس را مستقیم برای کاربر ارسال می‌کنند (auto_fulfill_vip_via_marzban)؛
-    # یعنی همین باگ ترتیب پیام‌های تست رایگان/بساز سرویس خودت اینجا هم وجود داشت. الان این پیام را
-    # همین که پرداخت تأیید شد (invoice.isPaid) می‌فرستیم، زودتر از ارسال خودکار سرویس.
+    # تمدید آنلاین باید قبل از اعلام موفقیت واقعاً روی پنل اعمال و تأیید شود.
+    # خریدهای معمولی همچنان همان جریان قبلی خودشان را دارند.
+    if payment_kind == "renew":
+        if not db.claim_online_payment_for_finalize(payment["id"]):
+            fresh = db.get_online_payment(payment["id"])
+            if fresh and fresh.get("status") == "paid":
+                await callback.answer("✅ این پرداخت قبلاً پردازش شده است.", show_alert=True)
+            else:
+                await callback.answer("⏳ این پرداخت در حال پردازش است.", show_alert=True)
+            return
+        try:
+            payload = json.loads(payment.get("extra") or "{}")
+        except Exception:
+            payload = {}
+        cfg = db.get_config_by_id(int(payload.get("cfg_id"))) if payload.get("cfg_id") else None
+        if not cfg or not cfg.get("service_id"):
+            db.set_online_payment_status(payment["id"], "pending")
+            await callback.answer("❌ سرویس تمدیدی پیدا نشد.", show_alert=True); return
+        ok, panel_data, msg = await vpn_panel.renew_user_additive(cfg["service_id"], float(payload.get("volume_gb") or 0), int(payload.get("days") or 0), source=cfg.get("source"), panel_id=cfg.get("panel_id"))
+        if not ok:
+            db.set_online_payment_status(payment["id"], "pending")
+            await answer_rich(callback.message, f"❌ تمدید روی پنل انجام نشد. پرداخت شما هنوز در وضعیت قابل بررسی است.\n{msg}", reply_markup=renew_payment_keyboard())
+            return
+        db.mark_online_payment_paid(payment["id"], None)
+        await answer_rich(callback.message, t("renew_done", service_name=payment.get("plan_name") or "سرویس", volume=(f"{float(payload.get('volume_gb') or 0):g} گیگ" if payload.get("volume_gb") else "بدون تغییر"), days=(f"{int(payload.get('days') or 0)} روز" if payload.get("days") else "بدون تغییر")))
+        return
+
     success_text = (
         "✅ کیف پول شما شارژ شد."
         if payment_kind == "wallet_charge"
         else "✅ پرداخت شما تأیید شد و سفارش شما در صف ارسال سرویس قرار گرفت."
     )
-    if payment_kind == "wallet_charge":
-        _sticker_key = "walletcharge_pay_online"
-    else:
-        _sticker_key = "plan_pay_online"
-    await show_menu_with_sticker(callback.bot, callback.message.chat.id, _sticker_key, 
-        success_text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[]),
-    )
+    _sticker_key = "walletcharge_pay_online" if payment_kind == "wallet_charge" else "plan_pay_online"
+    await show_menu_with_sticker(callback.bot, callback.message.chat.id, _sticker_key, success_text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[]))
 
-    # 🐛 فیکس: شاخهٔ "custom" (بساز-خودت) به‌همراه تابع finalize_custom_online_payment حذف شده بود (دیگر هیچ پرداختی با kind="custom" ساخته نمی‌شود)؛ فراخوانیش اینجا جا مانده بود و باعث ImportError در استارت می‌شد. حذف شد.
     if payment_kind == "wallet_charge":
         from handlers.wallet import finalize_wallet_charge_online_payment
         await finalize_wallet_charge_online_payment(callback.bot, payment)
@@ -942,7 +1028,7 @@ async def renew_choose_service(callback: types.CallbackQuery, state: FSMContext)
             category_id = plan.get("category_id") if plan else None
         except Exception:
             category_id = None
-    settings = bot_info.get_renewal_settings(category_id)
+    settings = _renewal_settings(category_id)
     mode = settings["mode"]
     await state.update_data(
         renew_cfg_id=cfg_id, renew_service_name=name, renew_mode=mode,
@@ -1006,7 +1092,7 @@ async def _renew_prepare_payment(target, state, volume_gb=0, days=0):
             category_id = plan.get("category_id") if plan else None
         except Exception:
             category_id = None
-    settings = bot_info.get_renewal_settings(category_id)
+    settings = _renewal_settings(category_id)
     mode = settings.get("mode", "day")
     if mode == "day":
         volume_gb = 0
@@ -1097,7 +1183,7 @@ async def renew_days_choice(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     if data.get("renew_mode") == "both":
         await state.update_data(renew_days=days)
-        settings = bot_info.get_renewal_settings(data.get("renew_category_id"))
+        settings = _renewal_settings(data.get("renew_category_id"))
         await answer_rich(callback.message, "حالا حجم تمدید را انتخاب کنید:", reply_markup=renew_volume_keyboard(settings))
         await callback.answer()
         return
@@ -1117,7 +1203,7 @@ async def renew_custom_days(message: types.Message, state: FSMContext):
     if data.get("renew_mode") == "both":
         await state.set_state(None)
         await state.update_data(renew_days=value)
-        settings = bot_info.get_renewal_settings(data.get("renew_category_id"))
+        settings = _renewal_settings(data.get("renew_category_id"))
         await answer_rich(message, "حالا حجم تمدید را انتخاب کنید:", reply_markup=renew_volume_keyboard(settings))
         return
     await _renew_prepare_payment(message, state, 0, value)
@@ -1127,6 +1213,53 @@ async def renew_custom_days(message: types.Message, state: FSMContext):
 @router.callback_query(F.data == "renew_cancel")
 async def renew_cancel(callback:types.CallbackQuery,state:FSMContext):
     await state.clear(); await answer_rich(callback.message,t("renew_cancelled"),reply_markup=main_reply_keyboard()); await callback.answer()
+
+@router.callback_query(F.data == "renewpay_wallet")
+async def renew_pay_wallet(callback: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    cfg = db.get_config_by_id(data.get("renew_cfg_id")) if data.get("renew_cfg_id") else None
+    user = db.get_user(callback.from_user.id)
+    price = int(data.get("renew_price") or 0)
+    if not user or not cfg or cfg.get("user_id") != user.get("id"):
+        await callback.answer(t("service_not_owned"), show_alert=True); return
+    if int(user.get("wallet") or 0) < price:
+        await answer_rich(callback.message, t("wallet_insufficient", price=price, wallet=user.get("wallet", 0), needed=price-int(user.get("wallet") or 0)), reply_markup=insufficient_balance_keyboard())
+        await callback.answer(); return
+    if not db.deduct_from_wallet(user["id"], price, f"تمدید {data.get('renew_service_name') or cfg.get('plan')}"):
+        await callback.answer(t("wallet_not_enough"), show_alert=True); return
+    ok, panel_data, msg = await vpn_panel.renew_user_additive(cfg["service_id"], float(data.get("renew_volume_gb") or 0), int(data.get("renew_days") or 0), source=cfg.get("source"), panel_id=cfg.get("panel_id"))
+    if not ok:
+        # بازگرداندن موجودی در صورت شکست واقعی پنل
+        try: db.add_to_wallet(user["id"], price, f"بازگشت وجه تمدید ناموفق {data.get('renew_service_name') or cfg.get('plan')}")
+        except Exception: pass
+        await answer_rich(callback.message, f"❌ تمدید روی پنل انجام نشد. مبلغ به کیف پول شما برگشت.\n{msg}", reply_markup=renew_payment_keyboard())
+        await callback.answer(); return
+    await state.clear()
+    await answer_rich(callback.message, t("renew_done", service_name=data.get("renew_service_name") or cfg.get("plan"), volume=(f"{float(data.get('renew_volume_gb') or 0):g} گیگ" if data.get("renew_volume_gb") else "بدون تغییر"), days=(f"{int(data.get('renew_days') or 0)} روز" if data.get("renew_days") else "بدون تغییر")))
+    await callback.answer("✅ تمدید شد")
+
+
+@router.callback_query(F.data == "renewpay_online")
+async def renew_pay_online(callback: types.CallbackQuery, state: FSMContext):
+    if not UNIQUEPAY_ENABLED:
+        await callback.answer(t("payment_not_active"), show_alert=True); return
+    data = await state.get_data(); cfg = db.get_config_by_id(data.get("renew_cfg_id")) if data.get("renew_cfg_id") else None
+    user = db.get_user(callback.from_user.id); price = int(data.get("renew_price") or 0)
+    if not user or not cfg:
+        await callback.answer(t("service_not_owned"), show_alert=True); return
+    if price < ONLINE_PAYMENT_MIN_AMOUNT:
+        await answer_rich(callback.message, "❌ حداقل مبلغ پرداخت آنلاین رعایت نشده است. لطفاً از کیف پول، کارت‌به‌کارت یا ارز دیجیتال استفاده کنید.", reply_markup=renew_payment_keyboard()); await callback.answer(); return
+    await answer_rich(callback, t("building_payment"))
+    hash_id = uniquepay.new_hash_id("renew")
+    invoice = await payments.create_invoice(hash_id, price)
+    if not invoice or not invoice.get("paymentLink"):
+        await answer_rich(callback.message, "❌ ساخت فاکتور آنلاین ناموفق بود. لطفاً روش دیگری را انتخاب کنید.", reply_markup=renew_payment_keyboard()); return
+    payload = json.dumps({"cfg_id": cfg["id"], "volume_gb": data.get("renew_volume_gb", 0), "days": data.get("renew_days", 0)}, ensure_ascii=False)
+    payment_id = db.create_online_payment(user_id=user["id"], telegram_id=str(callback.from_user.id), hash_id=hash_id, plan_name=data.get("renew_service_name") or cfg.get("plan") or "تمدید سرویس", price=price, order_type="renew", plan_key=cfg.get("plan"), payment_link=invoice.get("paymentLink"), ref_id=str(invoice.get("refId")), kind="renew", extra=payload, provider=invoice.get("provider", "uniquepay"))
+    await state.update_data(renew_online_payment_id=payment_id)
+    await show_menu_with_sticker(callback.bot, callback.message.chat.id, "plan_pay_online", progress_bar(2, 3) + f"\n\n🔁 تمدید سرویس\n📦 {data.get('renew_service_name') or cfg.get('plan')}\n💰 مبلغ قابل پرداخت: {price:,} تومان", reply_markup=online_payment_keyboard(invoice["paymentLink"], payment_id, cancel_callback="renew_cancel"))
+    await callback.answer()
+
 
 @router.callback_query(F.data == "renewpay_card")
 async def renew_pay_card(callback:types.CallbackQuery,state:FSMContext):
