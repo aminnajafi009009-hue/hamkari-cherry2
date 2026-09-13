@@ -456,11 +456,11 @@ def purchase_payment_keyboard(plan_key: str, show_discount: bool = True):
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def online_payment_keyboard(payment_link: str, online_payment_id: int):
+def online_payment_keyboard(payment_link: str, online_payment_id: int, cancel_callback: str = "plans"):
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t("online_pay"), url=payment_link, style="primary")],
         [InlineKeyboardButton(text=t("online_check"), callback_data=f"checkpay_{online_payment_id}", style="success")],
-        [InlineKeyboardButton(text=t("online_cancel"), callback_data="plans", style="danger")],
+        [InlineKeyboardButton(text=t("online_cancel"), callback_data=cancel_callback, style="danger")],
     ])
 
 
@@ -499,8 +499,8 @@ def renew_services_keyboard(configs):
     buttons=[]
     for cfg in configs:
         name=cfg.get("_display_name") or cfg.get("plan") or "سرویس"
-        buttons.append([InlineKeyboardButton(text=name, callback_data=f"renewcfg_{cfg['id']}", icon_custom_emoji_id=db.get_button_custom_emoji_id("renew_service_button"))])
-    buttons.append([InlineKeyboardButton(text=t("renew_cancel"), callback_data="renew_cancel")])
+        buttons.append([InlineKeyboardButton(text=name, callback_data=f"renewcfg_{cfg['id']}", icon_custom_emoji_id=db.get_button_custom_emoji_id("renew_service_button"), style="primary")])
+    buttons.append([InlineKeyboardButton(text=t("renew_cancel"), callback_data="renew_cancel", style="danger")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def _renew_choice_values(minimum: int, maximum: int, defaults: list[int]) -> list[int]:
@@ -546,10 +546,15 @@ def renew_days_keyboard(settings: dict | None = None):
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def renew_payment_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t("renew_pay_card"), callback_data="renewpay_card"), InlineKeyboardButton(text=t("renew_pay_crypto"), callback_data="renewpay_crypto")],
-        [InlineKeyboardButton(text=t("renew_pay_back"), callback_data="renew_cancel")],
-    ])
+    buttons = [
+        [InlineKeyboardButton(text=t("pay_wallet"), callback_data="renewpay_wallet", style="success")],
+    ]
+    if UNIQUEPAY_ENABLED:
+        buttons.append([InlineKeyboardButton(text=t("pay_online"), callback_data="renewpay_online", style="success")])
+    buttons.append([InlineKeyboardButton(text=t("pay_card"), callback_data="renewpay_card", style="success")])
+    buttons.append([InlineKeyboardButton(text=t("pay_crypto"), callback_data="renewpay_crypto", style="success")])
+    buttons.append([InlineKeyboardButton(text=t("pay_back"), callback_data="renew_cancel", style="danger")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def fair_use_keyboard(cfg_id):
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -1456,10 +1461,28 @@ def admin_botinfo_renewal_category_menu(category_id: int):
     ])
 
 
+def _renewal_settings_ui(category_id):
+    try: cid=int(category_id)
+    except Exception: cid=0
+    st={"mode":"day","price_day":0,"price_gb":5500,"min_day":1,"max_day":0,"min_gb":1,"max_gb":0}
+    for field in st:
+        raw=db.get_setting(f"renewal_category_{cid}_{field}") if cid else None
+        if raw not in (None, ""):
+            try: st[field]=raw if field=="mode" else int(float(raw))
+            except Exception: pass
+    try:
+        legacy=bot_info.get_renewal_settings(cid)
+        if isinstance(legacy,dict):
+            for field in st:
+                if db.get_setting(f"renewal_category_{cid}_{field}") in (None, "") and field in legacy: st[field]=legacy[field]
+    except Exception: pass
+    return st
+
+
 def admin_renewal_categories_menu():
     buttons = []
     for cat in db.get_vip_categories():
-        settings = bot_info.get_renewal_settings(cat["id"])
+        settings = _renewal_settings_ui(cat["id"])
         mode_label = {"day": "روز", "gb": "گیگ", "both": "روز+گیگ"}.get(settings["mode"], "روز")
         buttons.append([InlineKeyboardButton(
             text=f"🔁 {cat['name']} — {mode_label}",
@@ -1471,7 +1494,7 @@ def admin_renewal_categories_menu():
 def admin_renewal_category_menu(category_id: int):
     cat = db.get_vip_category(category_id)
     name = cat["name"] if cat else f"دسته {category_id}"
-    st = bot_info.get_renewal_settings(category_id)
+    st = _renewal_settings_ui(category_id)
     mode = {"day": "فقط روز", "gb": "فقط گیگ", "both": "روز + گیگ"}.get(st["mode"], "فقط روز")
     def lim(v, suffix):
         return "نامحدود" if not v else f"{v} {suffix}"
