@@ -1371,10 +1371,26 @@ async def _start_crypto_invoice(callback,state,renewal=False,plan_key=None):
         callback.message,
         t("crypto_choose_asset_intro",plan_name=label,price=price,rows=rows),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=t("crypto_asset_usdt"),callback_data="cryptoasset_USDT")],
-            [InlineKeyboardButton(text=t("crypto_asset_ton"),callback_data="cryptoasset_TON"),
-             InlineKeyboardButton(text=t("crypto_asset_trx"),callback_data="cryptoasset_TRX")],
-            [InlineKeyboardButton(text=t("renew_pay_back"),callback_data="renew_cancel")],
+            [InlineKeyboardButton(
+                text="USDT (TRC20)",
+                callback_data="cryptoasset_USDT",
+                style="success"
+            )],
+            [InlineKeyboardButton(
+                text="TON",
+                callback_data="cryptoasset_TON",
+                style="primary"
+            ),
+             InlineKeyboardButton(
+                 text="TRX",
+                 callback_data="cryptoasset_TRX",
+                 style="danger"
+             )],
+            [InlineKeyboardButton(
+                text="بازگشت",
+                callback_data="renew_cancel",
+                style="danger"
+            )],
         ]),
     )
 
