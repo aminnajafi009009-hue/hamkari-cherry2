@@ -696,6 +696,23 @@ def get_user(telegram_id) -> dict | None:
     return _fetchone(cur)
 
 
+def search_users_by_telegram_id_fragment(fragment: str, limit: int = 50) -> list[dict]:
+    """جستجوی کاربران با بخشی از آیدی عددی تلگرام."""
+    fragment = str(fragment or "").strip()
+    if not fragment.isdigit():
+        return []
+    try:
+        limit = max(1, min(int(limit), 100))
+    except Exception:
+        limit = 50
+    cur = get_connection().cursor()
+    cur.execute(
+        "SELECT * FROM users WHERE telegram_id LIKE ? ORDER BY CAST(telegram_id AS INTEGER) ASC LIMIT ?",
+        (f"%{fragment}%", limit),
+    )
+    return _fetchall(cur)
+
+
 def get_user_by_invite_code(code: str) -> dict | None:
     cur = get_connection().cursor()
     cur.execute("SELECT * FROM users WHERE invite_code = ?", (code.upper(),))
