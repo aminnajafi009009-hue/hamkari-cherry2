@@ -144,7 +144,7 @@ def _admin_fsm(bot) -> FSMContext | None:
 # ---------------------------------------------------------------------------
 async def auto_fulfill_vip_via_panel(bot, uid, plan_key: str, order_id: int | None) -> bool:
     mapping = db.get_panel_map_for_plan_key(plan_key)
-    if not mapping or not mapping.get("enabled"):
+    if not mapping or mapping.get("panel_id") is None or mapping.get("remote_ref") is None:
         return False
 
     plan = db.get_effective_plan(plan_key)
@@ -1410,7 +1410,6 @@ async def _deliver_panel_link(bot, ctx: dict, link: str):
     config_id = db.add_config(
         user["id"], plan_name, encrypted, expiry=expiry_date,
         config_type=config_type, service_id=service_id, source=panel_type, panel_id=panel_id,
-        category_id=((db.get_vip_plan(plan_key) or {}).get("category_id") if plan_key else None),
     )
 
     # 🛠 فیکس ریشه‌ای: اگر سفارش با کیف‌پول کاملاً از referral_wallet تأمین شده،
