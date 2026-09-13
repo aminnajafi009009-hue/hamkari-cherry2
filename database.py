@@ -164,7 +164,6 @@ def init_db():
             alert_80_sent     INTEGER NOT NULL DEFAULT 0,
             alert_90_sent     INTEGER NOT NULL DEFAULT 0,
             alert_expiry_sent INTEGER NOT NULL DEFAULT 0,
-            category_id INTEGER,
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
@@ -186,7 +185,6 @@ def init_db():
         "ALTER TABLE configs ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE configs ADD COLUMN fair_use_alert_sent INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE configs ADD COLUMN panel_id INTEGER",
-        "ALTER TABLE configs ADD COLUMN category_id INTEGER",
     ):
         try:
             cur.execute(ddl)
@@ -697,26 +695,6 @@ def get_user(telegram_id) -> dict | None:
     cur.execute("SELECT * FROM users WHERE telegram_id = ?", (str(telegram_id),))
     return _fetchone(cur)
 
-def search_users_by_telegram_id_fragment(fragment: str, limit: int = 50) -> list[dict]:
-    """جستجوی چندکاربره با بخشی از آیدی عددی تلگرام.
-
-    fragment فقط باید شامل رقم باشد؛ نتیجه‌ها بر اساس طول/خود آیدی مرتب می‌شوند
-    تا جستجوی بخشی، همهٔ کاربران منطبق را در قالب لیست برگرداند.
-    """
-    fragment = str(fragment or "").strip()
-    if not fragment.isdigit():
-        return []
-    try:
-        limit = max(1, min(int(limit), 100))
-    except Exception:
-        limit = 50
-    cur = get_connection().cursor()
-    cur.execute(
-        "SELECT * FROM users WHERE telegram_id LIKE ? ORDER BY CAST(telegram_id AS INTEGER) ASC LIMIT ?",
-        (f"%{fragment}%", limit),
-    )
-    return _fetchall(cur)
-
 
 def get_user_by_invite_code(code: str) -> dict | None:
     cur = get_connection().cursor()
@@ -976,13 +954,12 @@ def add_config(
     qr_file_id: str | None = None,
     source: str = "manual",
     panel_id: int | None = None,
-    category_id: int | None = None,
 ):
     with transaction() as cur:
         cur.execute(
-            """INSERT INTO configs (user_id, plan, config, expiry, created_at, type, service_id, qr_file_id, source, panel_id, category_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (user_id, plan_name, encrypted_config, expiry, _now(), config_type, service_id, qr_file_id, source, panel_id, category_id),
+            """INSERT INTO configs (user_id, plan, config, expiry, created_at, type, service_id, qr_file_id, source, panel_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, plan_name, encrypted_config, expiry, _now(), config_type, service_id, qr_file_id, source, panel_id),
         )
         return cur.lastrowid
 
@@ -1507,36 +1484,6 @@ def get_config_by_id(config_id: int) -> dict | None:
     cur = get_connection().cursor()
     cur.execute("SELECT * FROM configs WHERE id = ?", (config_id,))
     return _fetchone(cur)
-
-
-def get_config_renewal_category_id(config: dict | None) -> int | None:
-    """شناسه دسته VIP سرویس را برای قیمت تمدید پیدا می‌کند.
-    سرویس‌های جدید category_id را مستقیم دارند؛ سرویس‌های قدیمی با نام پلن
-    (قبل از اولین |) به‌صورت سازگار تشخیص داده می‌شوند.
-    """
-    if not config:
-        return None
-    try:
-        cid = int(config.get("category_id") or 0)
-        if cid > 0:
-            return cid
-    except Exception:
-        pass
-    plan_name = str(config.get("plan") or "").split(" | ", 1)[0].strip()
-    if not plan_name:
-        return None
-    cur = get_connection().cursor()
-    cur.execute("SELECT category_id FROM vip_plans WHERE name = ? ORDER BY id ASC", (plan_name,))
-    rows = _fetchall(cur)
-    if len(rows) == 1:
-        cid = int(rows[0]["category_id"])
-        try:
-            with transaction() as tx:
-                tx.execute("UPDATE configs SET category_id = ? WHERE id = ?", (cid, config.get("id")))
-        except Exception:
-            pass
-        return cid
-    return None
 
 
 def is_service_id_taken(service_id: str) -> bool:
@@ -3496,6 +3443,22 @@ def list_panel_plan_maps(scope=None, panel_id=None):
     cur.execute(q, vals); return _fetchall(cur)
 def delete_panel_plan_map(scope,scope_id):
     with transaction() as cur: cur.execute('DELETE FROM panel_plan_map WHERE scope=? AND scope_id=?',(scope,int(scope_id)))
+
+def clear_panel_plan_overrides_for_category(category_id):
+    """حذف نگاشت‌های اختصاصی پلن‌های یک دسته، بدون حذف نگاشت پیش‌فرض خود دسته.
+
+    این تابع برای زمانی است که ادمین نگاشت پیش‌فرض یک دسته را تغییر می‌دهد و
+    می‌خواهد همان نگاشت روی تمام پلن‌های آن دسته اعمال شود. فقط scope=vip_plan
+    مربوط به پلن‌های همان category حذف می‌شود؛ سایر دسته‌ها و داده‌های دیگر دست‌نخورده می‌مانند.
+    """
+    with transaction() as cur:
+        cur.execute(
+            """DELETE FROM panel_plan_map
+               WHERE scope='vip_plan'
+                 AND scope_id IN (SELECT id FROM vip_plans WHERE category_id=?)""",
+            (int(category_id),),
+        )
+
 def get_panel_map_for_plan_key(plan_key):
     if plan_key==FREE_TEST_PLAN_KEY: return get_panel_plan_map('free_test',0)
     plan=get_vip_plan(plan_key)
