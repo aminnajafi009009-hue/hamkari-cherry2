@@ -4268,6 +4268,31 @@ async def admin_botinfo_open_msg(message: types.Message, state: FSMContext):
     await answer_rich(message, _botinfo_status_text(), reply_markup=admin_botinfo_menu())
 
 
+def _admin_renewal_settings(category_id):
+    try:
+        cid = int(category_id)
+    except Exception:
+        cid = 0
+    defaults = {"mode":"day","price_day":0,"price_gb":5500,"min_day":1,"max_day":0,"min_gb":1,"max_gb":0}
+    if cid <= 0:
+        return defaults
+    fields = ("mode","price_day","price_gb","min_day","max_day","min_gb","max_gb")
+    for field in fields:
+        raw = db.get_setting(f"renewal_category_{cid}_{field}")
+        if raw not in (None, ""):
+            try: defaults[field] = raw if field == "mode" else int(float(raw))
+            except Exception: pass
+    try:
+        legacy = bot_info.get_renewal_settings(cid)
+        if isinstance(legacy, dict):
+            for field in fields:
+                if db.get_setting(f"renewal_category_{cid}_{field}") in (None, "") and field in legacy:
+                    defaults[field] = legacy[field]
+    except Exception:
+        pass
+    return defaults
+
+
 @router.callback_query(F.data == "admin_renewal_settings")
 async def admin_renewal_settings_open(callback: types.CallbackQuery, state: FSMContext):
     if not _is_admin(callback.from_user.id):
@@ -4296,7 +4321,7 @@ async def admin_renewal_category(callback: types.CallbackQuery, state: FSMContex
         await callback.answer("❌ دسته پیدا نشد.", show_alert=True)
         return
     await state.clear()
-    st = bot_info.get_renewal_settings(category_id)
+    st = _admin_renewal_settings(category_id)
     await edit_rich(
         callback.message,
         f"🔁 تنظیمات تمدید\n\n🗂 دسته: {cat['name']}\n\n"
@@ -4324,13 +4349,15 @@ async def admin_renewal_mode_save(callback: types.CallbackQuery, state: FSMConte
     parts = callback.data.split("_")
     try:
         mode, category_id = parts[1], int(parts[2])
-        bot_info.set_renewal_setting(category_id, "mode", mode)
+        db.set_setting(f"renewal_category_{category_id}_mode", mode)
+        try: bot_info.set_renewal_setting(category_id, "mode", mode)
+        except Exception: pass
     except Exception:
         await callback.answer("❌ مقدار نامعتبر.", show_alert=True)
         return
     await state.clear()
     cat = db.get_vip_category(category_id)
-    st = bot_info.get_renewal_settings(category_id)
+    st = _admin_renewal_settings(category_id)
     if cat:
         await edit_rich(
             callback.message,
@@ -4358,7 +4385,7 @@ async def admin_renewal_numeric_start(callback: types.CallbackQuery, state: FSMC
     key = f"renewal_category_{category_id}_{field}_{unit}"
     await state.update_data(botinfo_key=key, renewal_category_id=int(category_id))
     await state.set_state(AdminStates.waiting_botinfo_value)
-    st = bot_info.get_renewal_settings(int(category_id))
+    st = _admin_renewal_settings(int(category_id))
     current = st[f"{field}_{unit}"]
     label = {"price":"قیمت", "min":"حداقل", "max":"حداکثر"}[field]
     suffix = "تومان" if field == "price" else ("روز" if unit == "day" else "گیگ")
@@ -4414,11 +4441,13 @@ async def admin_botinfo_edit_save(message: types.Message, state: FSMContext):
             if number < 0 or (field == "min" and number < 1):
                 raise ValueError
             if field == "max":
-                st = bot_info.get_renewal_settings(category_id)
+                st = _admin_renewal_settings(category_id)
                 minimum = int(st.get(f"min_{unit}") or 1)
                 if number and number < minimum:
                     raise ValueError
-            bot_info.set_renewal_setting(category_id, f"{field}_{unit}", number)
+            db.set_setting(f"renewal_category_{category_id}_{field}_{unit}", str(number))
+            try: bot_info.set_renewal_setting(category_id, f"{field}_{unit}", number)
+            except Exception: pass
         except Exception:
             await answer_rich(message, "❌ مقدار نامعتبر است؛ فقط عدد صحیح وارد کنید. برای حداکثر، ۰ یعنی نامحدود.")
             return
