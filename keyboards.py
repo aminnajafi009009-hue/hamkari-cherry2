@@ -252,6 +252,8 @@ def admin_reply_keyboard(orders_enabled: bool | None = None, permissions: set[st
     pair("logs","🦖 لاگ خطاها","botinfo","ℹ️ اطلاعات ربات")
     pair("stickers","🎬 استیکرهای منو","backup","💾 بکاپ")
     pair("texts","📝 مدیریت متن‌های کاربر","settings","🎁 تنظیم تست رایگان")
+    if allowed("settings"):
+        rows.append([KeyboardButton(text="🔁 تنظیمات تمدید", style="success")])
     if allowed("orders_toggle"):
         rows.append([KeyboardButton(text=("🔴 خاموش کردن سفارشات" if orders_enabled else "🟢 روشن کردن سفارشات"), style=("danger" if orders_enabled else "success"))])
     if is_main_admin: rows.append([KeyboardButton(text="👮 مدیریت ادمین‌ها", style="danger")])
@@ -1425,7 +1427,6 @@ def admin_botinfo_menu():
     buttons = []
     for key, label in labels.items():
         buttons.append([InlineKeyboardButton(text=f"✏️ {label}", callback_data=f"botinfoedit_{key}", style="primary")])
-    buttons.append([InlineKeyboardButton(text="💰 قیمت تمدید بر اساس دسته‌بندی", callback_data="botinforenewal", style="success")])
     buttons.append([InlineKeyboardButton(text="📢 مدیریت کانال‌های اجباری", callback_data="botinfochannels", style="primary")])
     buttons.append([InlineKeyboardButton(text="🔙 بازگشت", callback_data="admin_back", style="primary")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
